@@ -30,11 +30,12 @@ export function normaliseWeights(rawWeights) {
 export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   const { weights, normalised } = normaliseWeights(rawWeights);
 
-  const assetClass = {};
-  const sector     = {};
-  const region     = {};
-  const stockConc  = {};
-  const unresolved = [];
+  const assetClass    = {};
+  const sector        = {};
+  const region        = {};
+  const stockConc     = {};
+  const stockConcVia  = {}; // ticker -> Set of ETF tickers it came through
+  const unresolved    = [];
 
   for (const h of resolvedHoldings) {
     if (h.error) { unresolved.push(h.ticker); continue; }
@@ -75,6 +76,8 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       let covered = 0;
       for (const top of h.topHoldings) {
         add(stockConc, top.ticker, w * top.weight);
+        if (!stockConcVia[top.ticker]) stockConcVia[top.ticker] = new Set();
+        stockConcVia[top.ticker].add(h.ticker);
         covered += top.weight;
       }
       if (covered < 1) add(stockConc, `${h.ticker} (rest)`, w * (1 - covered));
@@ -89,7 +92,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   const flags = [
     ...buildDimFlags('sector', sector, thresholds.sector),
     ...buildDimFlags('region', region, thresholds.region),
-    ...buildStockFlags(stockConc, thresholds.stock),
+    ...buildStockFlags(stockConc, stockConcVia, thresholds.stock),
   ];
 
   return { assetClass, sector, region, flags, unresolved, normalised };
@@ -116,14 +119,15 @@ function buildDimFlags(dimension, buckets, threshold) {
   return flags;
 }
 
-function buildStockFlags(stockConc, threshold) {
+function buildStockFlags(stockConc, stockConcVia, threshold) {
   const flags = [];
   for (const [name, value] of Object.entries(stockConc)) {
     if (name.endsWith('(rest)')) continue;
+    const via = stockConcVia[name] ? [...stockConcVia[name]].join(', ') : null;
     if (value >= threshold) {
-      flags.push({ dimension: 'stock', name, value, threshold, status: 'red' });
+      flags.push({ dimension: 'stock', name, value, threshold, status: 'red', via });
     } else if (value >= threshold - 5) {
-      flags.push({ dimension: 'stock', name, value, threshold, status: 'amber' });
+      flags.push({ dimension: 'stock', name, value, threshold, status: 'amber', via });
     }
   }
   if (flags.length === 0) {

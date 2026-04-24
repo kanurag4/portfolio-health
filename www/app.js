@@ -429,7 +429,8 @@ function buildFlagEl(f) {
     detail = `Well diversified${countNote}. No concentration above ${f.threshold}%.`;
   } else {
     const near = f.status === 'amber' ? 'approaching' : 'exceeds';
-    title  = `${dimLabel} concentration — ${f.name}`;
+    const viaNote = f.via ? ` (via ${f.via})` : '';
+    title  = `${dimLabel} concentration — ${f.name}${viaNote}`;
     detail = `${f.value.toFixed(1)}% ${near} your ${f.threshold}% threshold.`;
   }
 

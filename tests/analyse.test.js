@@ -152,6 +152,37 @@ describe('analysePortfolio — ETF look-through', () => {
   });
 });
 
+describe('analysePortfolio — via field in stock flags', () => {
+  it('populates via with source ETF ticker when stock breaches threshold', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [
+        { ticker: 'CBA.AX', name: 'CBA', weight: 0.15 }, // 15% of 100% ETF = 15% > 10% threshold
+      ],
+      sectorWeightings: [],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    const cbaFlag = flags.find(f => f.dimension === 'stock' && f.name === 'CBA.AX');
+    assert.ok(cbaFlag, 'CBA.AX flag should exist');
+    assert.equal(cbaFlag.status, 'red');
+    assert.equal(cbaFlag.via, 'VAS.AX');
+  });
+
+  it('via is null for direct stock holdings', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [{ ticker: 'CBA.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    const cbaFlag = flags.find(f => f.dimension === 'stock' && f.name === 'CBA.AX');
+    assert.ok(cbaFlag, 'CBA.AX flag should exist');
+    assert.equal(cbaFlag.via, null);
+  });
+});
+
 describe('analysePortfolio — unresolved tickers', () => {
   it('collects error tickers in unresolved array', () => {
     const { unresolved } = analysePortfolio(
