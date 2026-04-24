@@ -57,7 +57,8 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
 
       if (h.countryWeightings && h.countryWeightings.length > 0) {
         for (const cw of h.countryWeightings) {
-          const [country, pct] = Object.entries(cw)[0];
+          const [country, val] = Object.entries(cw)[0];
+          const pct = typeof val === 'object' ? (val.raw ?? 0) : val;
           add(region, countryToRegion(country), w * pct);
         }
       } else {

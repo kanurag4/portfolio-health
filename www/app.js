@@ -514,4 +514,3 @@ document.getElementById('btn-pdf').addEventListener('click', () => {
 renderHoldingsList();
 renderThresholds();
 
-export { state, saveState };

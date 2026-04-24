@@ -162,3 +162,22 @@ describe('analysePortfolio — unresolved tickers', () => {
     assert.deepEqual(unresolved, ['XYZ']);
   });
 });
+
+describe('analysePortfolio — Yahoo {raw,fmt} countryWeightings', () => {
+  it('extracts .raw from object-format countryWeightings', () => {
+    const holdings = [{
+      ticker: 'VGS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [],
+      sectorWeightings: [],
+      countryWeightings: [
+        { 'United States': { raw: 0.65, fmt: '65.00%' } },
+        { 'Japan': { raw: 0.07, fmt: '7.00%' } },
+      ],
+    }];
+    const rawWeights = [{ ticker: 'VGS.AX', inputMode: '%', value: 100 }];
+    const { region } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(region['United States'] - 65) < 0.1);
+    assert.ok(Math.abs(region['International Developed'] - 7) < 0.1);
+  });
+});
