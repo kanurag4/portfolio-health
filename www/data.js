@@ -37,6 +37,42 @@ export function countryToRegion(country) {
   return REGION_MAP[country] ?? 'Unclassified';
 }
 
+const SUFFIX_REGION = {
+  'AX': 'Australia',
+  'NZ': 'Australia',
+  'NS': 'Emerging Markets', 'BO': 'Emerging Markets',  // India
+  'SS': 'Emerging Markets', 'SZ': 'Emerging Markets',  // China A-shares
+  'KS': 'Emerging Markets', 'KQ': 'Emerging Markets',  // Korea
+  'TW': 'Emerging Markets',                             // Taiwan
+  'SA': 'Emerging Markets',                             // Brazil
+  'MX': 'Emerging Markets',                             // Mexico
+  'L':  'International Developed',                      // London
+  'T':  'International Developed',                      // Tokyo
+  'HK': 'International Developed',                      // Hong Kong
+  'SI': 'International Developed',                      // Singapore
+  'AS': 'International Developed',                      // Amsterdam
+  'PA': 'International Developed',                      // Paris
+  'DE': 'International Developed',                      // Frankfurt (XETRA)
+  'F':  'International Developed',                      // Frankfurt
+  'SW': 'International Developed',                      // Switzerland
+  'ST': 'International Developed',                      // Stockholm
+  'CO': 'International Developed',                      // Copenhagen
+  'OL': 'International Developed',                      // Oslo
+  'HE': 'International Developed',                      // Helsinki
+  'BR': 'International Developed',                      // Brussels
+  'MC': 'International Developed',                      // Madrid
+  'MI': 'International Developed',                      // Milan
+  'TO': 'International Developed',                      // Toronto
+};
+
+export function regionFromTicker(ticker) {
+  if (!ticker) return 'Unclassified';
+  const dot = ticker.lastIndexOf('.');
+  if (dot === -1) return 'United States';
+  const suffix = ticker.slice(dot + 1);
+  return SUFFIX_REGION[suffix] ?? 'Unclassified';
+}
+
 export async function fetchHolding(ticker) {
   const symbol = ticker.trim().toUpperCase();
   const url = `${YAHOO_PROXY_URL.replace(/\/$/, '')}/quoteSummary/${encodeURIComponent(symbol)}`;

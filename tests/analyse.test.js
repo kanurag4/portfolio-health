@@ -163,6 +163,43 @@ describe('analysePortfolio — unresolved tickers', () => {
   });
 });
 
+describe('analysePortfolio — region fallback from top holdings tickers', () => {
+  it('infers region from .AX tickers when countryWeightings is empty', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [
+        { ticker: 'CBA.AX', name: 'CBA', weight: 0.09 },
+        { ticker: 'BHP.AX', name: 'BHP', weight: 0.07 },
+      ],
+      sectorWeightings: [],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { region } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(region['Australia'] - 16) < 0.1);     // 9 + 7 = 16% top holdings
+    assert.ok(Math.abs(region['Unclassified'] - 84) < 0.1);  // remaining 84% uncovered
+  });
+
+  it('infers mixed regions from global ETF top holdings', () => {
+    const holdings = [{
+      ticker: 'VGS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [
+        { ticker: 'AAPL',    name: 'Apple',    weight: 0.05 },
+        { ticker: 'MSFT',    name: 'Microsoft', weight: 0.04 },
+        { ticker: 'SHEL.L',  name: 'Shell',    weight: 0.02 },
+      ],
+      sectorWeightings: [],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VGS.AX', inputMode: '%', value: 100 }];
+    const { region } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(region['United States'] - 9) < 0.1);            // AAPL 5 + MSFT 4
+    assert.ok(Math.abs(region['International Developed'] - 2) < 0.1);  // SHEL.L 2
+  });
+});
+
 describe('analysePortfolio — Yahoo {raw,fmt} countryWeightings', () => {
   it('extracts .raw from object-format countryWeightings', () => {
     const holdings = [{

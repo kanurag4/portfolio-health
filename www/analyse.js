@@ -1,4 +1,4 @@
-import { countryToRegion, SECTOR_LABELS } from './data.js';
+import { countryToRegion, regionFromTicker, SECTOR_LABELS } from './data.js';
 
 export function normaliseWeights(rawWeights) {
   const percentItems = rawWeights.filter(w => w.inputMode === '%');
@@ -61,6 +61,13 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
           const pct = typeof val === 'object' ? (val.raw ?? 0) : val;
           add(region, countryToRegion(country), w * pct);
         }
+      } else if (h.topHoldings && h.topHoldings.length > 0) {
+        let covered = 0;
+        for (const top of h.topHoldings) {
+          add(region, regionFromTicker(top.ticker), w * top.weight);
+          covered += top.weight;
+        }
+        if (covered < 1) add(region, 'Unclassified', w * (1 - covered));
       } else {
         add(region, 'Unclassified', w);
       }
