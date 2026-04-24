@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Health — KashVector</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="kv-header">
+    <a href="/" class="kv-logo-link">
+      <img src="/logo.svg" alt="KashVector" class="kv-logo" />
+    </a>
+    <div class="kv-header-text">
+      <h1>Portfolio Health</h1>
+      <p class="kv-subtitle">Understand your investment diversification</p>
+    </div>
+  </header>
+
+  <main class="kv-main">
+    <!-- INPUT PANEL -->
+    <section class="kv-panel kv-input-panel" id="input-panel">
+      <div class="kv-excel-row">
+        <button class="kv-btn kv-btn-secondary" id="btn-download-template">↓ Download Template</button>
+        <label class="kv-btn kv-btn-secondary kv-file-label" for="file-import">↑ Import Excel
+          <input type="file" id="file-import" accept=".xlsx,.xls" hidden />
+        </label>
+      </div>
+      <p class="kv-divider-label">— or enter manually —</p>
+
+      <div id="holdings-list"></div>
+      <button class="kv-btn kv-btn-ghost" id="btn-add-row">+ Add another holding</button>
+
+      <details class="kv-thresholds" id="thresholds-details">
+        <summary>Concentration Thresholds</summary>
+        <label>Single stock max
+          <input type="text" inputmode="numeric" id="thresh-stock" value="10" class="kv-input-sm" /> %
+        </label>
+        <label>Single sector max
+          <input type="text" inputmode="numeric" id="thresh-sector" value="30" class="kv-input-sm" /> %
+        </label>
+        <label>Single region max
+          <input type="text" inputmode="numeric" id="thresh-region" value="50" class="kv-input-sm" /> %
+        </label>
+      </details>
+
+      <div class="kv-action-row">
+        <button class="kv-btn kv-btn-primary" id="btn-analyse">Analyse Portfolio</button>
+        <button class="kv-btn kv-btn-ghost kv-btn-reset" id="btn-reset">Reset ↺</button>
+      </div>
+    </section>
+
+    <!-- RESULTS PANEL -->
+    <section class="kv-panel kv-results-panel" id="results-panel">
+      <div id="results-placeholder" class="kv-placeholder">
+        Add your holdings and click Analyse
+      </div>
+      <div id="results-content" hidden>
+        <div id="unresolved-warning" class="kv-warning" hidden></div>
+        <div id="normalised-note" class="kv-note" hidden>Weights normalised to 100%</div>
+        <div id="summary-strip" class="kv-summary-strip"></div>
+        <div id="flags-container" class="kv-flags"></div>
+        <div class="kv-chart-section">
+          <h3>Asset Class</h3>
+          <canvas id="chart-asset" height="120"></canvas>
+        </div>
+        <div class="kv-chart-section">
+          <h3>Sector</h3>
+          <canvas id="chart-sector" height="220"></canvas>
+        </div>
+        <div class="kv-chart-section">
+          <h3>Region</h3>
+          <canvas id="chart-region" height="120"></canvas>
+        </div>
+        <div class="kv-export-row">
+          <button class="kv-btn kv-btn-secondary" id="btn-pdf">Download PDF</button>
+          <button class="kv-btn kv-btn-secondary" id="btn-export-excel">Download Excel</button>
+        </div>
+        <details class="kv-holdings-table-details">
+          <summary>Holdings Breakdown</summary>
+          <table id="holdings-table" class="kv-table">
+            <thead>
+              <tr><th>Ticker</th><th>Name</th><th>Type</th><th>Weight %</th><th>Sector</th><th>Region / Country</th></tr>
+            </thead>
+            <tbody id="holdings-table-body"></tbody>
+          </table>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="kv-footer">
+    This tool is for educational purposes only and does not constitute financial advice.
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
