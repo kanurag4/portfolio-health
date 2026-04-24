@@ -167,6 +167,99 @@ function showPlaceholder() {
   document.getElementById('results-content').hidden = true;
 }
 
+// ── Excel ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-download-template').addEventListener('click', downloadTemplate);
+
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new();
+
+  const holdingsData = [
+    ['Ticker', 'Name (optional)', 'Amount_AUD', 'Percentage', 'Notes'],
+    ['VAS.AX', 'Vanguard AU Shares', 10000, '', 'ASX ETF'],
+    ['VOO', 'Vanguard S&P 500', '', 20, 'US ETF'],
+    ['CBA.AX', '', 5000, '', ''],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(holdingsData);
+  ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Holdings');
+
+  const instructions = [
+    ['Portfolio Health — Import Instructions'],
+    [''],
+    ['1. Fill in the Holdings sheet, one row per investment.'],
+    ['2. Enter either Amount_AUD OR Percentage per row, not both.'],
+    ['3. Ticker format: add .AX for ASX, .NS for NSE India, no suffix for US stocks.'],
+    ['4. Save and import back into the Portfolio Health tool.'],
+    ['5. Name and Notes columns are optional.'],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(instructions);
+  ws2['!cols'] = [{ wch: 60 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Instructions');
+
+  XLSX.writeFile(wb, 'portfolio-health-template.xlsx');
+}
+
+document.getElementById('file-import').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const ws = wb.Sheets['Holdings'] ?? wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+  const imported = [];
+  const skipped = [];
+
+  for (const row of rows) {
+    const ticker = String(row['Ticker'] ?? '').trim().toUpperCase();
+    if (!ticker) continue;
+    const amtRaw = row['Amount_AUD'];
+    const pctRaw = row['Percentage'];
+    const amt = parseFloat(String(amtRaw).replace(/,/g, ''));
+    const pct = parseFloat(String(pctRaw).replace(/,/g, ''));
+
+    if (isFinite(amt) && amt > 0) {
+      imported.push({ ticker, inputMode: '$', value: amt });
+    } else if (isFinite(pct) && pct > 0) {
+      imported.push({ ticker, inputMode: '%', value: pct });
+    } else {
+      skipped.push(ticker);
+    }
+  }
+
+  if (imported.length === 0) {
+    alert('No valid holdings found in the Excel file. Check the Ticker and Amount/Percentage columns.');
+    e.target.value = '';
+    return;
+  }
+
+  state.holdings = imported;
+  saveState();
+  renderHoldingsList();
+  if (skipped.length > 0) {
+    alert(`Imported ${imported.length} holding(s). Skipped ${skipped.length} row(s) with no valid amount: ${skipped.join(', ')}`);
+  }
+  e.target.value = '';
+});
+
+document.getElementById('btn-export-excel')?.addEventListener('click', exportExcel);
+
+function exportExcel() {
+  const rows = state.holdings
+    .filter(h => h.ticker)
+    .map(h => ({
+      Ticker: h.ticker,
+      Amount_AUD: h.inputMode === '$' ? h.value : '',
+      Percentage: h.inputMode === '%' ? h.value : '',
+    }));
+  if (rows.length === 0) { alert('No holdings to export.'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws, 'Holdings');
+  XLSX.writeFile(wb, 'my-portfolio.xlsx');
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderHoldingsList();
 renderThresholds();
