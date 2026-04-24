@@ -260,6 +260,127 @@ function exportExcel() {
   XLSX.writeFile(wb, 'my-portfolio.xlsx');
 }
 
+// ── Analyse ──────────────────────────────────────────────────────────────────
+let lastAnalysis = null;
+
+btnAnalyse.addEventListener('click', async () => {
+  const validHoldings = state.holdings.filter(h => h.ticker && h.value !== '' && Number(h.value) > 0);
+  if (validHoldings.length === 0) {
+    alert('Please add at least one holding with a ticker and amount.');
+    return;
+  }
+
+  btnAnalyse.textContent = 'Analysing…';
+  btnAnalyse.disabled = true;
+
+  try {
+    const resolvedHoldings = await Promise.all(
+      validHoldings.map(h => fetchHolding(h.ticker))
+    );
+
+    const analysis = analysePortfolio(resolvedHoldings, validHoldings, state.thresholds);
+    lastAnalysis = { resolvedHoldings, analysis, rawWeights: validHoldings };
+
+    await renderResults(resolvedHoldings, analysis, validHoldings);
+  } catch (err) {
+    alert('Analysis failed: ' + err.message);
+  } finally {
+    btnAnalyse.textContent = 'Analyse Portfolio';
+    btnAnalyse.disabled = false;
+  }
+});
+
+async function renderResults(resolvedHoldings, analysis, rawWeights) {
+  document.getElementById('results-placeholder').hidden = true;
+  document.getElementById('results-content').hidden = false;
+
+  const unresolvedEl = document.getElementById('unresolved-warning');
+  if (analysis.unresolved.length > 0) {
+    unresolvedEl.hidden = false;
+    unresolvedEl.textContent = `⚠ Could not fetch data for: ${analysis.unresolved.join(', ')}. These are excluded from the analysis.`;
+  } else {
+    unresolvedEl.hidden = true;
+  }
+
+  document.getElementById('normalised-note').hidden = !analysis.normalised;
+
+  const resolved = resolvedHoldings.filter(h => !h.error);
+  const etfCount = resolved.filter(h => h.quoteType === 'ETF').length;
+  const stockCount = resolved.filter(h => h.quoteType === 'EQUITY').length;
+  const sectorCount = Object.keys(analysis.sector).filter(k => !k.includes('Unclassified')).length;
+  const regionCount = Object.keys(analysis.region).filter(k => k !== 'Unclassified').length;
+
+  document.getElementById('summary-strip').innerHTML = `
+    <div class="kv-summary-item">
+      <div class="kv-summary-value">${resolved.length}</div>
+      <div class="kv-summary-label">Holdings</div>
+    </div>
+    <div class="kv-summary-item">
+      <div class="kv-summary-value">${etfCount}</div>
+      <div class="kv-summary-label">ETFs</div>
+    </div>
+    <div class="kv-summary-item">
+      <div class="kv-summary-value">${stockCount}</div>
+      <div class="kv-summary-label">Stocks</div>
+    </div>
+    <div class="kv-summary-item">
+      <div class="kv-summary-value">${sectorCount}</div>
+      <div class="kv-summary-label">Sectors</div>
+    </div>
+    <div class="kv-summary-item">
+      <div class="kv-summary-value">${regionCount}</div>
+      <div class="kv-summary-label">Regions</div>
+    </div>
+  `;
+
+  await renderHoldingsTable(resolvedHoldings, rawWeights);
+  renderFlags(analysis.flags);
+  renderCharts(analysis);
+}
+
+async function renderHoldingsTable(resolvedHoldings, rawWeights) {
+  const { normaliseWeights } = await import('./analyse.js');
+  const { weights } = normaliseWeights(rawWeights);
+  const tbody = document.getElementById('holdings-table-body');
+  tbody.innerHTML = '';
+
+  for (const h of resolvedHoldings) {
+    const w = weights[h.ticker] ?? 0;
+    const tr = document.createElement('tr');
+    if (h.error) {
+      tr.innerHTML = `<td>${h.ticker}</td><td>—</td><td>—</td><td>—</td><td colspan="2" style="color:var(--kv-fail)">Unresolved</td>`;
+    } else if (h.quoteType === 'ETF') {
+      tr.innerHTML = `
+        <td>${h.ticker}</td>
+        <td>${h.name ?? '—'}</td>
+        <td>ETF</td>
+        <td>${w.toFixed(1)}%</td>
+        <td>Diversified</td>
+        <td>—</td>
+      `;
+    } else {
+      const { countryToRegion } = await import('./data.js');
+      tr.innerHTML = `
+        <td>${h.ticker}</td>
+        <td>${h.name ?? '—'}</td>
+        <td>Stock</td>
+        <td>${w.toFixed(1)}%</td>
+        <td>${h.sector ?? '—'}</td>
+        <td>${countryToRegion(h.country)}</td>
+      `;
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+function renderFlags(flags) {
+  // implemented in Task 11
+}
+
+function renderCharts(analysis) {
+  // implemented in Task 10
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderHoldingsList();
 renderThresholds();
