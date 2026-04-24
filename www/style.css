@@ -143,6 +143,32 @@ body {
 .kv-flag-title  { font-weight: 700; }
 .kv-flag-detail { color: var(--kv-muted); font-size: 0.8rem; }
 
+/* Data notes disclosure */
+.kv-data-notes {
+  border: 1px solid var(--kv-border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 20px; font-size: 0.8rem;
+}
+.kv-data-notes summary {
+  cursor: pointer; color: var(--kv-muted); font-size: 0.8rem;
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.kv-data-notes summary::before { content: 'ℹ'; color: var(--kv-accent); }
+.kv-data-notes[open] summary { margin-bottom: 10px; }
+.kv-data-notes ul {
+  padding-left: 16px; color: var(--kv-muted); display: flex;
+  flex-direction: column; gap: 5px; line-height: 1.5;
+}
+.kv-data-notes code {
+  font-size: 0.75rem; background: var(--kv-card-2);
+  padding: 1px 4px; border-radius: 3px; color: var(--kv-accent);
+}
+
+/* Chart captions */
+.kv-chart-note {
+  font-size: 0.72rem; color: var(--kv-muted);
+  margin-top: 6px; line-height: 1.4;
+}
+
 /* Charts */
 .kv-chart-section { margin-bottom: 24px; }
 .kv-chart-section h3 { font-size: 0.9rem; color: var(--kv-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }

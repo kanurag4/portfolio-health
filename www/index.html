@@ -64,6 +64,18 @@
         <div id="normalised-note" class="kv-note" hidden>Weights normalised to 100%</div>
         <div id="summary-strip" class="kv-summary-strip"></div>
         <div id="flags-container" class="kv-flags"></div>
+
+        <details class="kv-data-notes">
+          <summary>Data &amp; methodology notes</summary>
+          <ul>
+            <li><strong>Data source:</strong> Yahoo Finance via a proxy — may be delayed or incomplete for some tickers.</li>
+            <li><strong>ETF sectors:</strong> sourced from Yahoo's <code>sectorWeightings</code> module, which covers the full fund.</li>
+            <li><strong>ETF regions:</strong> sourced from Yahoo's country data where available. When unavailable, estimated from the top-10 holding ticker suffixes only (<code>.AX</code> = Australia, no suffix = United States, <code>.L</code> = UK, etc.). Weight outside the top 10 appears as Unclassified.</li>
+            <li><strong>Stock concentration:</strong> ETF look-through covers top-10 holdings only. Sub-holdings below that threshold are excluded from concentration flags.</li>
+            <li><strong>Mixed $ / % inputs</strong> are normalised proportionally — see the "Weights normalised" note if shown.</li>
+          </ul>
+        </details>
+
         <div class="kv-chart-section">
           <h3>Asset Class</h3>
           <div class="kv-chart-wrapper"><canvas id="chart-asset"></canvas></div>
@@ -71,10 +83,12 @@
         <div class="kv-chart-section">
           <h3>Sector</h3>
           <div class="kv-chart-wrapper kv-chart-wrapper--tall"><canvas id="chart-sector"></canvas></div>
+          <p class="kv-chart-note">ETF sectors from Yahoo Finance sectorWeightings (full fund). Equities use their reported sector.</p>
         </div>
         <div class="kv-chart-section">
           <h3>Region</h3>
           <div class="kv-chart-wrapper"><canvas id="chart-region"></canvas></div>
+          <p class="kv-chart-note">ETF regions from Yahoo country data where available, otherwise estimated from top-10 ticker suffixes. Unclassified = weight outside top 10.</p>
         </div>
         <div class="kv-export-row">
           <button class="kv-btn kv-btn-secondary" id="btn-pdf">Download PDF</button>
