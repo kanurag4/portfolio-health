@@ -57,11 +57,13 @@ function buildRow(holding, index) {
   const ticker = document.createElement('input');
   ticker.className = 'kv-input';
   ticker.type = 'text';
-  ticker.placeholder = 'e.g. VAS.AX';
+  ticker.placeholder = 'e.g. VAS, CBA (or VOO.US)';
   ticker.value = holding.ticker;
   ticker.addEventListener('blur', () => {
-    state.holdings[index].ticker = ticker.value.trim().toUpperCase();
-    ticker.value = state.holdings[index].ticker;
+    let t = ticker.value.trim().toUpperCase();
+    if (t && !t.includes('.')) t += '.AX';
+    state.holdings[index].ticker = t;
+    ticker.value = t;
     saveState();
   });
 
@@ -211,8 +213,9 @@ document.getElementById('file-import').addEventListener('change', async e => {
   const skipped = [];
 
   for (const row of rows) {
-    const ticker = String(row['Ticker'] ?? '').trim().toUpperCase();
+    let ticker = String(row['Ticker'] ?? '').trim().toUpperCase();
     if (!ticker) continue;
+    if (!ticker.includes('.')) ticker += '.AX';
     const amtRaw = row['Amount_AUD'];
     const pctRaw = row['Percentage'];
     const amt = parseFloat(String(amtRaw).replace(/,/g, ''));
