@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(js|json|html|css\\)$\")",
+      "Bash(git -C /c/Projects/PortfolioHealth status)",
+      "Bash(git -C /c/Projects/PortfolioHealth diff)",
+      "Bash(git -C /c/Projects/PortfolioHealth log --oneline -10)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}
