@@ -138,6 +138,8 @@ body {
 /* Charts */
 .kv-chart-section { margin-bottom: 24px; }
 .kv-chart-section h3 { font-size: 0.9rem; color: var(--kv-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+.kv-chart-wrapper { position: relative; height: 160px; }
+.kv-chart-wrapper--tall { height: 220px; }
 
 /* Export row */
 .kv-export-row { display: flex; gap: 8px; margin-bottom: 16px; }

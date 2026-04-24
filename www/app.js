@@ -444,9 +444,6 @@ function renderHBar(canvasId, buckets, threshold) {
   const labels = sorted.map(([k]) => k);
   const values = sorted.map(([, v]) => parseFloat(v.toFixed(1)));
 
-  // Size canvas to exactly fit the bars — no empty space
-  ctx.style.height = `${labels.length * 28 + 44}px`;
-
   const colors = values.map(v => {
     if (v >= threshold)       return 'rgba(239,68,68,0.75)';
     if (v >= threshold - 5)   return 'rgba(245,158,11,0.75)';
@@ -463,31 +460,38 @@ function renderHBar(canvasId, buckets, threshold) {
         borderColor: colors.map(c => c.replace('0.75', '1')),
         borderWidth: 1,
         borderRadius: 4,
-        barThickness: 18,
       }],
     },
     options: {
-      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${ctx.parsed.x.toFixed(1)}%`,
+            label: ctx => ` ${ctx.parsed.y.toFixed(1)}%`,
           },
         },
       },
       scales: {
         x: {
+          grid: { display: false },
+          ticks: {
+            color: '#f1f5f9',
+            font: { size: 11 },
+            maxRotation: 35,
+            minRotation: 0,
+            callback(val) {
+              const lbl = this.getLabelForValue(val);
+              return lbl.length > 14 ? lbl.slice(0, 13) + '…' : lbl;
+            },
+          },
+        },
+        y: {
           min: 0,
           max: 100,
           grid: { color: '#334155' },
           ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
-        },
-        y: {
-          grid: { display: false },
-          ticks: { color: '#f1f5f9', font: { size: 11 } },
         },
       },
     },
@@ -495,15 +499,15 @@ function renderHBar(canvasId, buckets, threshold) {
       id: 'threshold-line',
       afterDraw(chart) {
         const { ctx: c, chartArea, scales } = chart;
-        const x = scales.x.getPixelForValue(threshold);
-        if (x < chartArea.left || x > chartArea.right) return;
+        const y = scales.y.getPixelForValue(threshold);
+        if (y < chartArea.top || y > chartArea.bottom) return;
         c.save();
         c.strokeStyle = 'rgba(148,163,184,0.5)';
         c.setLineDash([4, 4]);
         c.lineWidth = 1;
         c.beginPath();
-        c.moveTo(x, chartArea.top);
-        c.lineTo(x, chartArea.bottom);
+        c.moveTo(chartArea.left, y);
+        c.lineTo(chartArea.right, y);
         c.stroke();
         c.restore();
       },
