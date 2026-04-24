@@ -377,8 +377,89 @@ function renderFlags(flags) {
   // implemented in Task 11
 }
 
+// ── Charts ────────────────────────────────────────────────────────────────────
+const chartInstances = {};
+
 function renderCharts(analysis) {
-  // implemented in Task 10
+  renderHBar('chart-asset',  analysis.assetClass, 100);
+  renderHBar('chart-sector', analysis.sector,     state.thresholds.sector);
+  renderHBar('chart-region', analysis.region,     state.thresholds.region);
+}
+
+function renderHBar(canvasId, buckets, threshold) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  if (chartInstances[canvasId]) {
+    chartInstances[canvasId].destroy();
+  }
+
+  const sorted = Object.entries(buckets)
+    .sort(([, a], [, b]) => b - a)
+    .filter(([, v]) => v > 0.1);
+
+  const labels = sorted.map(([k]) => k);
+  const values = sorted.map(([, v]) => parseFloat(v.toFixed(1)));
+
+  const colors = values.map(v => {
+    if (v >= threshold)       return 'rgba(239,68,68,0.75)';
+    if (v >= threshold - 5)   return 'rgba(245,158,11,0.75)';
+    return 'rgba(34,197,94,0.75)';
+  });
+
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.replace('0.75', '1')),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.x.toFixed(1)}%`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          max: Math.max(100, ...values) + 5,
+          grid: { color: '#334155' },
+          ticks: { color: '#94a3b8', callback: v => v + '%' },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#f1f5f9', font: { size: 12 } },
+        },
+      },
+    },
+    plugins: [{
+      id: 'threshold-line',
+      afterDraw(chart) {
+        const { ctx: c, chartArea, scales } = chart;
+        const x = scales.x.getPixelForValue(threshold);
+        if (x < chartArea.left || x > chartArea.right) return;
+        c.save();
+        c.strokeStyle = 'rgba(148,163,184,0.5)';
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(x, chartArea.top);
+        c.lineTo(x, chartArea.bottom);
+        c.stroke();
+        c.restore();
+      },
+    }],
+  });
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
