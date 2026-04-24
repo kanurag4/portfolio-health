@@ -505,6 +505,11 @@ function renderHBar(canvasId, buckets, threshold) {
   });
 }
 
+// ── PDF ───────────────────────────────────────────────────────────────────────
+document.getElementById('btn-pdf').addEventListener('click', () => {
+  window.print();
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderHoldingsList();
 renderThresholds();
