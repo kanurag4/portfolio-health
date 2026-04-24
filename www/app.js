@@ -444,6 +444,9 @@ function renderHBar(canvasId, buckets, threshold) {
   const labels = sorted.map(([k]) => k);
   const values = sorted.map(([, v]) => parseFloat(v.toFixed(1)));
 
+  // Size canvas to exactly fit the bars — no empty space
+  ctx.style.height = `${labels.length * 28 + 44}px`;
+
   const colors = values.map(v => {
     if (v >= threshold)       return 'rgba(239,68,68,0.75)';
     if (v >= threshold - 5)   return 'rgba(245,158,11,0.75)';
@@ -460,11 +463,13 @@ function renderHBar(canvasId, buckets, threshold) {
         borderColor: colors.map(c => c.replace('0.75', '1')),
         borderWidth: 1,
         borderRadius: 4,
+        barThickness: 18,
       }],
     },
     options: {
       indexAxis: 'y',
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -475,13 +480,14 @@ function renderHBar(canvasId, buckets, threshold) {
       },
       scales: {
         x: {
-          max: Math.max(100, ...values) + 5,
+          min: 0,
+          max: 100,
           grid: { color: '#334155' },
-          ticks: { color: '#94a3b8', callback: v => v + '%' },
+          ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
         },
         y: {
           grid: { display: false },
-          ticks: { color: '#f1f5f9', font: { size: 12 } },
+          ticks: { color: '#f1f5f9', font: { size: 11 } },
         },
       },
     },
