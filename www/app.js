@@ -7,7 +7,7 @@ const STORAGE_KEY = 'portfoliohealth_v1';
 
 function defaultState() {
   return {
-    holdings: [{ ticker: '', inputMode: '$', value: '' }],
+    holdings: [{ ticker: '', inputMode: '$', value: '', isAsx: true }],
     thresholds: { stock: 10, sector: 30, region: 50 },
   };
 }
@@ -20,7 +20,7 @@ function loadState() {
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     return {
-      holdings: parsed.holdings ?? defaultState().holdings,
+      holdings: (parsed.holdings ?? defaultState().holdings).map(h => ({ ...h, isAsx: h.isAsx ?? true })),
       thresholds: { ...defaultState().thresholds, ...(parsed.thresholds ?? {}) },
     };
   } catch {
@@ -57,15 +57,35 @@ function buildRow(holding, index) {
   const ticker = document.createElement('input');
   ticker.className = 'kv-input';
   ticker.type = 'text';
-  ticker.placeholder = 'e.g. VAS, CBA (or VOO.US)';
+  ticker.placeholder = 'e.g. VAS, CBA';
   ticker.value = holding.ticker;
   ticker.addEventListener('blur', () => {
     let t = ticker.value.trim().toUpperCase();
-    if (t && !t.includes('.')) t += '.AX';
+    if (t && state.holdings[index].isAsx && !t.includes('.')) t += '.AX';
     state.holdings[index].ticker = t;
     ticker.value = t;
     saveState();
   });
+
+  const asxLabel = document.createElement('label');
+  asxLabel.className = 'kv-asx-toggle';
+  asxLabel.title = 'Uncheck for US or other markets';
+  const asxCheck = document.createElement('input');
+  asxCheck.type = 'checkbox';
+  asxCheck.checked = holding.isAsx !== false;
+  asxCheck.addEventListener('change', () => {
+    state.holdings[index].isAsx = asxCheck.checked;
+    let t = state.holdings[index].ticker;
+    if (asxCheck.checked && t && !t.includes('.')) {
+      t += '.AX';
+    } else if (!asxCheck.checked && t.endsWith('.AX')) {
+      t = t.slice(0, -3);
+    }
+    state.holdings[index].ticker = t;
+    ticker.value = t;
+    saveState();
+  });
+  asxLabel.append(asxCheck, document.createTextNode('ASX'));
 
   const modeBtn = document.createElement('button');
   modeBtn.className = 'kv-mode-toggle';
@@ -108,7 +128,7 @@ function buildRow(holding, index) {
     renderHoldingsList();
   });
 
-  row.append(ticker, modeBtn, amount, removeBtn);
+  row.append(ticker, asxLabel, modeBtn, amount, removeBtn);
   return row;
 }
 
@@ -118,7 +138,7 @@ function formatInputVal(v) {
 }
 
 btnAddRow.addEventListener('click', () => {
-  state.holdings.push({ ticker: '', inputMode: '$', value: '' });
+  state.holdings.push({ ticker: '', inputMode: '$', value: '', isAsx: true });
   saveState();
   renderHoldingsList();
   holdingsList.lastElementChild?.querySelector('input')?.focus();
@@ -213,18 +233,18 @@ document.getElementById('file-import').addEventListener('change', async e => {
   const skipped = [];
 
   for (const row of rows) {
-    let ticker = String(row['Ticker'] ?? '').trim().toUpperCase();
+    const ticker = String(row['Ticker'] ?? '').trim().toUpperCase();
     if (!ticker) continue;
-    if (!ticker.includes('.')) ticker += '.AX';
     const amtRaw = row['Amount_AUD'];
     const pctRaw = row['Percentage'];
     const amt = parseFloat(String(amtRaw).replace(/,/g, ''));
     const pct = parseFloat(String(pctRaw).replace(/,/g, ''));
 
+    const isAsx = ticker.endsWith('.AX') || !ticker.includes('.');
     if (isFinite(amt) && amt > 0) {
-      imported.push({ ticker, inputMode: '$', value: amt });
+      imported.push({ ticker: isAsx && !ticker.includes('.') ? ticker + '.AX' : ticker, inputMode: '$', value: amt, isAsx });
     } else if (isFinite(pct) && pct > 0) {
-      imported.push({ ticker, inputMode: '%', value: pct });
+      imported.push({ ticker: isAsx && !ticker.includes('.') ? ticker + '.AX' : ticker, inputMode: '%', value: pct, isAsx });
     } else {
       skipped.push(ticker);
     }
