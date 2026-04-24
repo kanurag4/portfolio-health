@@ -373,8 +373,51 @@ async function renderHoldingsTable(resolvedHoldings, rawWeights) {
   }
 }
 
+// ── Flags ─────────────────────────────────────────────────────────────────────
 function renderFlags(flags) {
-  // implemented in Task 11
+  const container = document.getElementById('flags-container');
+  container.innerHTML = '';
+
+  const greens  = flags.filter(f => f.status === 'green');
+  const nonGreen = flags.filter(f => f.status !== 'green');
+
+  for (const f of nonGreen) {
+    container.appendChild(buildFlagEl(f));
+  }
+  const greenDims = [...new Set(greens.map(f => f.dimension))];
+  for (const dim of greenDims) {
+    const f = greens.find(g => g.dimension === dim);
+    container.appendChild(buildFlagEl(f));
+  }
+}
+
+function buildFlagEl(f) {
+  const el = document.createElement('div');
+  const cls = f.status === 'red' ? 'kv-flag-red' : f.status === 'amber' ? 'kv-flag-amber' : 'kv-flag-green';
+  el.className = `kv-flag ${cls}`;
+
+  const icon = f.status === 'red' ? '🔴' : f.status === 'amber' ? '🟡' : '🟢';
+  const dimLabel = { sector: 'Sector', region: 'Region', stock: 'Holdings' }[f.dimension] ?? f.dimension;
+
+  let title, detail;
+  if (f.status === 'green') {
+    const countNote = f.count > 0 ? ` across ${f.count} ${f.dimension === 'stock' ? 'positions' : f.dimension + 's'}` : '';
+    title  = `${dimLabel} diversification`;
+    detail = `Well diversified${countNote}. No concentration above ${f.threshold}%.`;
+  } else {
+    const near = f.status === 'amber' ? 'approaching' : 'exceeds';
+    title  = `${dimLabel} concentration — ${f.name}`;
+    detail = `${f.value.toFixed(1)}% ${near} your ${f.threshold}% threshold.`;
+  }
+
+  el.innerHTML = `
+    <span class="kv-flag-icon">${icon}</span>
+    <div>
+      <div class="kv-flag-title">${title}</div>
+      <div class="kv-flag-detail">${detail}</div>
+    </div>
+  `;
+  return el;
 }
 
 // ── Charts ────────────────────────────────────────────────────────────────────
