@@ -28,6 +28,17 @@ body {
   padding: 16px 24px;
   border-bottom: 1px solid var(--kv-border);
 }
+.kv-header--centered {
+  justify-content: center;
+  position: relative;
+}
+.kv-header--centered .kv-logo-link {
+  position: absolute; left: 24px;
+}
+.kv-header-title-group {
+  display: flex; align-items: center; gap: 12px;
+}
+.kv-tool-icon { height: 40px; width: 40px; object-fit: contain; border-radius: 8px; }
 .kv-logo { height: 32px; }
 .kv-header-text h1 { font-size: 1.25rem; font-weight: 700; }
 .kv-subtitle { font-size: 0.8rem; color: var(--kv-muted); }
