@@ -65,6 +65,7 @@ describe('analysePortfolio — stock only', () => {
     { ticker: 'MPL.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
     { ticker: 'ORI.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
     { ticker: 'SYD.AX', quoteType: 'EQUITY', sector: 'Real Estate', country: 'Australia', error: false },
+    // 'Consumer Discretionary' is intentional — direct stock sectors pass through as-is (no SECTOR_LABELS mapping needed)
     { ticker: 'GMG.AX', quoteType: 'EQUITY', sector: 'Consumer Discretionary', country: 'Australia', error: false },
   ];
   const rawWeights = [

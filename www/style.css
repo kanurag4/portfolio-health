@@ -92,6 +92,8 @@ body {
 }
 .kv-input:focus { outline: 1px solid var(--kv-accent); border-color: var(--kv-accent); }
 .kv-input-sm { width: 60px; }
+.kv-input-sm::-webkit-inner-spin-button,
+.kv-input-sm::-webkit-outer-spin-button { opacity: 0.4; }
 .kv-mode-toggle {
   background: var(--kv-card-2); border: 1px solid var(--kv-border);
   color: var(--kv-accent); border-radius: 6px; padding: 7px 8px;

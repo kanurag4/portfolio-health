@@ -1,6 +1,6 @@
 import { parseMoney } from './utils.js';
-import { fetchHolding } from './data.js';
-import { analysePortfolio } from './analyse.js';
+import { fetchHolding, countryToRegion } from './data.js';
+import { analysePortfolio, normaliseWeights } from './analyse.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'portfoliohealth_v1';
@@ -130,8 +130,9 @@ function buildRow(holding, index) {
       state.holdings[index].value = raw === '' ? '' : Number(raw);
       const cursor = e.target.selectionStart;
       const formatted = raw === '' ? '' : Number(raw).toLocaleString('en-AU', { maximumFractionDigits: 2 });
+      const oldLen = e.target.value.length;
       e.target.value = formatted;
-      const diff = formatted.length - e.target.value.length;
+      const diff = formatted.length - oldLen;
       try { e.target.setSelectionRange(cursor + diff, cursor + diff); } catch {}
       saveState();
       updatePctRemaining();
@@ -175,10 +176,12 @@ function renderThresholds() {
 
 [threshEtf, threshStock, threshSector, threshRegion].forEach(el => {
   el.addEventListener('change', () => {
-    state.thresholds.etf    = parseMoney(threshEtf.value)    || 30;
-    state.thresholds.stock  = parseMoney(threshStock.value)  || 10;
-    state.thresholds.sector = parseMoney(threshSector.value) || 30;
-    state.thresholds.region = parseMoney(threshRegion.value) || 50;
+    const parse = v => { const n = parseMoney(v); return isFinite(n) && n > 0 ? n : null; };
+    state.thresholds.etf    = parse(threshEtf.value)    ?? state.thresholds.etf;
+    state.thresholds.stock  = parse(threshStock.value)  ?? state.thresholds.stock;
+    state.thresholds.sector = parse(threshSector.value) ?? state.thresholds.sector;
+    state.thresholds.region = parse(threshRegion.value) ?? state.thresholds.region;
+    renderThresholds(); // snap any invalid inputs back to the current valid value
     saveState();
   });
 });
@@ -219,13 +222,13 @@ function downloadTemplate() {
   const wb = XLSX.utils.book_new();
 
   const holdingsData = [
-    ['Ticker', 'Name (optional)', 'Amount_AUD', 'Percentage', 'Notes'],
-    ['VAS.AX', 'Vanguard AU Shares', 10000, '', 'ASX ETF'],
-    ['VOO', 'Vanguard S&P 500', '', 20, 'US ETF'],
-    ['CBA.AX', '', 5000, '', ''],
+    ['Ticker', 'Name (optional)', 'Amount_AUD', 'Percentage', 'IsASX', 'Notes'],
+    ['VAS.AX', 'Vanguard AU Shares', 10000, '',  'Yes', 'ASX ETF — suffix already present'],
+    ['VOO',    'Vanguard S&P 500',   '',    20,  'No',  'US ETF — no suffix, IsASX=No'],
+    ['CBA.AX', '',                   5000,  '',  'Yes', ''],
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(holdingsData);
-  ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 20 }];
+  ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 28 }];
   XLSX.utils.book_append_sheet(wb, ws1, 'Holdings');
 
   const instructions = [
@@ -233,9 +236,10 @@ function downloadTemplate() {
     [''],
     ['1. Fill in the Holdings sheet, one row per investment.'],
     ['2. Enter either Amount_AUD OR Percentage per row, not both.'],
-    ['3. Ticker format: add .AX for ASX, .NS for NSE India, no suffix for US stocks.'],
-    ['4. Save and import back into the Portfolio Health tool.'],
-    ['5. Name and Notes columns are optional.'],
+    ['3. Ticker format: add .AX for ASX stocks/ETFs, .NS for NSE India, no suffix for US.'],
+    ['4. IsASX column: enter Yes for Australian holdings without a suffix (adds .AX automatically). Enter No for US/international tickers without a suffix.'],
+    ['5. Save and import back into the Portfolio Health tool.'],
+    ['6. Name and Notes columns are optional.'],
   ];
   const ws2 = XLSX.utils.aoa_to_sheet(instructions);
   ws2['!cols'] = [{ wch: 60 }];
@@ -263,11 +267,19 @@ document.getElementById('file-import').addEventListener('change', async e => {
     const amt = parseFloat(String(amtRaw).replace(/,/g, ''));
     const pct = parseFloat(String(pctRaw).replace(/,/g, ''));
 
-    const isAsx = ticker.endsWith('.AX') || !ticker.includes('.');
+    // Derive isAsx: suffix takes precedence; for no-suffix tickers, read IsASX column.
+    const isAsxCol = String(row['IsASX'] ?? '').trim().toLowerCase();
+    const hasSuffix = ticker.includes('.');
+    const isAsx = ticker.endsWith('.AX')
+      ? true
+      : hasSuffix
+        ? false
+        : isAsxCol === 'yes' || isAsxCol === 'y' || isAsxCol === 'true';
+    const resolvedTicker = !hasSuffix && isAsx ? ticker + '.AX' : ticker;
     if (isFinite(amt) && amt > 0) {
-      imported.push({ ticker: isAsx && !ticker.includes('.') ? ticker + '.AX' : ticker, inputMode: '$', value: amt, isAsx });
+      imported.push({ ticker: resolvedTicker, inputMode: '$', value: amt, isAsx });
     } else if (isFinite(pct) && pct > 0) {
-      imported.push({ ticker: isAsx && !ticker.includes('.') ? ticker + '.AX' : ticker, inputMode: '%', value: pct, isAsx });
+      imported.push({ ticker: resolvedTicker, inputMode: '%', value: pct, isAsx });
     } else {
       skipped.push(ticker);
     }
@@ -379,13 +391,12 @@ async function renderResults(resolvedHoldings, analysis, rawWeights) {
     </div>
   `;
 
-  await renderHoldingsTable(resolvedHoldings, rawWeights);
+  renderHoldingsTable(resolvedHoldings, rawWeights);
   renderFlags(analysis.flags);
   renderCharts(analysis);
 }
 
-async function renderHoldingsTable(resolvedHoldings, rawWeights) {
-  const { normaliseWeights } = await import('./analyse.js');
+function renderHoldingsTable(resolvedHoldings, rawWeights) {
   const { weights } = normaliseWeights(rawWeights);
   const tbody = document.getElementById('holdings-table-body');
   tbody.innerHTML = '';
@@ -405,7 +416,6 @@ async function renderHoldingsTable(resolvedHoldings, rawWeights) {
         <td>—</td>
       `;
     } else {
-      const { countryToRegion } = await import('./data.js');
       tr.innerHTML = `
         <td>${h.ticker}</td>
         <td>${h.name ?? '—'}</td>
@@ -447,7 +457,8 @@ function buildFlagEl(f) {
 
   let title, detail;
   if (f.status === 'green') {
-    const countNote = f.count > 0 ? ` across ${f.count} ${f.dimension === 'stock' ? 'positions' : f.dimension + 's'}` : '';
+    const pluralLabel = { stock: 'positions', etf: 'ETFs', sector: 'sectors', region: 'regions' }[f.dimension] ?? (f.dimension + 's');
+    const countNote = f.count > 0 ? ` across ${f.count} ${pluralLabel}` : '';
     title  = `${dimLabel} diversification`;
     detail = `Well diversified${countNote}. No concentration above ${f.threshold}%.`;
   } else {

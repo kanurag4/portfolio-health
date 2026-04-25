@@ -19,7 +19,7 @@ export function normaliseWeights(rawWeights) {
   }
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
-  const normalised = Math.abs(total - 100) > 0.5;
+  const normalised = Math.abs(total - 100) > 0.5; // 0.5% tolerance to absorb fp drift
   if (normalised && total > 0) {
     for (const k of Object.keys(weights)) weights[k] = (weights[k] / total) * 100;
   }
@@ -76,7 +76,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       }
 
       let covered = 0;
-      for (const top of h.topHoldings) {
+      for (const top of (h.topHoldings ?? [])) {
         add(stockConc, top.ticker, w * top.weight);
         if (!stockConcVia[top.ticker]) stockConcVia[top.ticker] = new Set();
         stockConcVia[top.ticker].add(h.ticker);
@@ -92,10 +92,10 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   }
 
   const flags = [
-    ...buildDimFlags('etf', etfConc, thresholds.etf ?? 30),
-    ...buildDimFlags('sector', sector, thresholds.sector),
-    ...buildDimFlags('region', region, thresholds.region),
-    ...buildStockFlags(stockConc, stockConcVia, thresholds.stock),
+    ...buildDimFlags('etf',    etfConc,  thresholds.etf    ?? 30),
+    ...buildDimFlags('sector', sector,   thresholds.sector  ?? 30),
+    ...buildDimFlags('region', region,   thresholds.region  ?? 50),
+    ...buildStockFlags(stockConc, stockConcVia, thresholds.stock ?? 10),
   ];
 
   return { assetClass, sector, region, flags, unresolved, normalised };
