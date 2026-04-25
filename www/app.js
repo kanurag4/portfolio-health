@@ -451,10 +451,13 @@ function buildFlagEl(f) {
     title  = `${dimLabel} diversification`;
     detail = `Well diversified${countNote}. No concentration above ${f.threshold}%.`;
   } else {
-    const near = f.status === 'amber' ? 'approaching' : 'exceeds';
+    const rounded = Math.round(f.value * 10) / 10;
+    const verb = f.status === 'amber' ? 'approaching'
+               : rounded === f.threshold ? 'meets'
+               : 'exceeds';
     const viaNote = f.via ? ` (via ${f.via})` : '';
     title  = `${dimLabel} concentration — ${f.name}${viaNote}`;
-    detail = `${f.value.toFixed(1)}% ${near} your ${f.threshold}% threshold.`;
+    detail = `${f.value.toFixed(1)}% ${verb} your ${f.threshold}% threshold.`;
   }
 
   el.innerHTML = `

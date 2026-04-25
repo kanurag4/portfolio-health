@@ -106,14 +106,18 @@ function add(obj, key, value) {
   obj[key] = (obj[key] ?? 0) + value;
 }
 
+function flagStatus(value, threshold) {
+  const v = Math.round(value * 10) / 10; // round to 1 dp to avoid floating-point drift
+  if (v >= threshold) return 'red';
+  if (v >= threshold - 5) return 'amber';
+  return null;
+}
+
 function buildDimFlags(dimension, buckets, threshold) {
   const flags = [];
   for (const [name, value] of Object.entries(buckets)) {
-    if (value >= threshold) {
-      flags.push({ dimension, name, value, threshold, status: 'red' });
-    } else if (value >= threshold - 5) {
-      flags.push({ dimension, name, value, threshold, status: 'amber' });
-    }
+    const status = flagStatus(value, threshold);
+    if (status) flags.push({ dimension, name, value, threshold, status });
   }
   if (flags.length === 0) {
     flags.push({ dimension, name: 'all', value: null, threshold, status: 'green',
@@ -127,11 +131,8 @@ function buildStockFlags(stockConc, stockConcVia, threshold) {
   for (const [name, value] of Object.entries(stockConc)) {
     if (name.endsWith('(rest)')) continue;
     const via = stockConcVia[name] ? [...stockConcVia[name]].join(', ') : null;
-    if (value >= threshold) {
-      flags.push({ dimension: 'stock', name, value, threshold, status: 'red', via });
-    } else if (value >= threshold - 5) {
-      flags.push({ dimension: 'stock', name, value, threshold, status: 'amber', via });
-    }
+    const status = flagStatus(value, threshold);
+    if (status) flags.push({ dimension: 'stock', name, value, threshold, status, via });
   }
   if (flags.length === 0) {
     flags.push({ dimension: 'stock', name: 'all', value: null, threshold, status: 'green',
