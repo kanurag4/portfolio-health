@@ -91,6 +91,15 @@ body {
   cursor: pointer; font-size: 1rem; line-height: 1; padding: 4px;
 }
 .kv-remove-btn:hover { color: var(--kv-fail); }
+/* % remaining counter */
+.kv-pct-remaining {
+  font-size: 0.8rem; text-align: right; padding: 2px 4px;
+  min-height: 1.2em;
+}
+.kv-pct-rem  { color: var(--kv-muted); }
+.kv-pct-ok   { color: var(--kv-pass); font-weight: 600; }
+.kv-pct-over { color: var(--kv-fail); font-weight: 600; }
+
 .kv-asx-toggle {
   display: flex; align-items: center; gap: 3px;
   font-size: 0.72rem; color: var(--kv-muted);

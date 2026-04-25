@@ -152,6 +152,42 @@ describe('analysePortfolio — ETF look-through', () => {
   });
 });
 
+describe('analysePortfolio — ETF concentration flags', () => {
+  it('flags red when single ETF exceeds etf threshold', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], sectorWeightings: [], countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const thresholds = { etf: 30, stock: 10, sector: 30, region: 50 };
+    const { flags } = analysePortfolio(holdings, rawWeights, thresholds);
+    const etfFlag = flags.find(f => f.dimension === 'etf' && f.name === 'VAS.AX');
+    assert.ok(etfFlag, 'ETF flag should exist');
+    assert.equal(etfFlag.status, 'red'); // 100% > 30%
+  });
+
+  it('flags green when all ETF holdings are below amber threshold', () => {
+    const mkEtf = ticker => ({
+      ticker, quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], sectorWeightings: [], countryWeightings: [],
+    });
+    const holdings = [mkEtf('VAS.AX'), mkEtf('VGS.AX'), mkEtf('VAF.AX'), mkEtf('VGE.AX'), mkEtf('VDHG.AX')];
+    const rawWeights = [
+      { ticker: 'VAS.AX',  inputMode: '%', value: 20 },
+      { ticker: 'VGS.AX',  inputMode: '%', value: 20 },
+      { ticker: 'VAF.AX',  inputMode: '%', value: 20 },
+      { ticker: 'VGE.AX',  inputMode: '%', value: 20 },
+      { ticker: 'VDHG.AX', inputMode: '%', value: 20 },
+    ];
+    const thresholds = { etf: 30, stock: 10, sector: 30, region: 50 };
+    const { flags } = analysePortfolio(holdings, rawWeights, thresholds);
+    const greenEtf = flags.find(f => f.dimension === 'etf' && f.status === 'green');
+    assert.ok(greenEtf);
+  });
+});
+
 describe('analysePortfolio — via field in stock flags', () => {
   it('populates via with source ETF ticker when stock breaches threshold', () => {
     const holdings = [{

@@ -7,8 +7,8 @@ const STORAGE_KEY = 'portfoliohealth_v1';
 
 function defaultState() {
   return {
-    holdings: [{ ticker: '', inputMode: '$', value: '', isAsx: true }],
-    thresholds: { stock: 10, sector: 30, region: 50 },
+    holdings: [{ ticker: '', inputMode: '%', value: '', isAsx: true }],
+    thresholds: { etf: 30, stock: 10, sector: 30, region: 50 },
   };
 }
 
@@ -40,14 +40,34 @@ const holdingsList   = document.getElementById('holdings-list');
 const btnAddRow      = document.getElementById('btn-add-row');
 const btnAnalyse     = document.getElementById('btn-analyse');
 const btnReset       = document.getElementById('btn-reset');
+const threshEtf      = document.getElementById('thresh-etf');
 const threshStock    = document.getElementById('thresh-stock');
 const threshSector   = document.getElementById('thresh-sector');
 const threshRegion   = document.getElementById('thresh-region');
+const pctRemainingEl = document.getElementById('pct-remaining');
 
 // ── Holdings rows ──────────────────────────────────────────────────────────
 function renderHoldingsList() {
   holdingsList.innerHTML = '';
   state.holdings.forEach((h, i) => holdingsList.appendChild(buildRow(h, i)));
+  updatePctRemaining();
+}
+
+function updatePctRemaining() {
+  const pctRows = state.holdings.filter(h => h.inputMode === '%');
+  if (pctRows.length === 0) { pctRemainingEl.textContent = ''; return; }
+  const sum = pctRows.reduce((s, h) => s + (parseFloat(h.value) || 0), 0);
+  const rem = 100 - sum;
+  if (Math.abs(rem) < 0.05) {
+    pctRemainingEl.textContent = '✓ 100% allocated';
+    pctRemainingEl.className = 'kv-pct-remaining kv-pct-ok';
+  } else if (rem < 0) {
+    pctRemainingEl.textContent = `${Math.abs(rem).toFixed(1)}% over 100%`;
+    pctRemainingEl.className = 'kv-pct-remaining kv-pct-over';
+  } else {
+    pctRemainingEl.textContent = `${rem.toFixed(1)}% remaining`;
+    pctRemainingEl.className = 'kv-pct-remaining kv-pct-rem';
+  }
 }
 
 function buildRow(holding, index) {
@@ -95,7 +115,7 @@ function buildRow(holding, index) {
     state.holdings[index].inputMode = state.holdings[index].inputMode === '$' ? '%' : '$';
     state.holdings[index].value = '';
     saveState();
-    renderHoldingsList();
+    renderHoldingsList(); // also calls updatePctRemaining
   });
 
   const amount = document.createElement('input');
@@ -114,6 +134,7 @@ function buildRow(holding, index) {
       const diff = formatted.length - e.target.value.length;
       try { e.target.setSelectionRange(cursor + diff, cursor + diff); } catch {}
       saveState();
+      updatePctRemaining();
     }
   });
 
@@ -138,7 +159,7 @@ function formatInputVal(v) {
 }
 
 btnAddRow.addEventListener('click', () => {
-  state.holdings.push({ ticker: '', inputMode: '$', value: '', isAsx: true });
+  state.holdings.push({ ticker: '', inputMode: '%', value: '', isAsx: true });
   saveState();
   renderHoldingsList();
   holdingsList.lastElementChild?.querySelector('input')?.focus();
@@ -146,13 +167,15 @@ btnAddRow.addEventListener('click', () => {
 
 // ── Thresholds ──────────────────────────────────────────────────────────────
 function renderThresholds() {
+  threshEtf.value    = state.thresholds.etf;
   threshStock.value  = state.thresholds.stock;
   threshSector.value = state.thresholds.sector;
   threshRegion.value = state.thresholds.region;
 }
 
-[threshStock, threshSector, threshRegion].forEach(el => {
+[threshEtf, threshStock, threshSector, threshRegion].forEach(el => {
   el.addEventListener('change', () => {
+    state.thresholds.etf    = parseMoney(threshEtf.value)    || 30;
     state.thresholds.stock  = parseMoney(threshStock.value)  || 10;
     state.thresholds.sector = parseMoney(threshSector.value) || 30;
     state.thresholds.region = parseMoney(threshRegion.value) || 50;
@@ -420,7 +443,7 @@ function buildFlagEl(f) {
   el.className = `kv-flag ${cls}`;
 
   const icon = f.status === 'red' ? '🔴' : f.status === 'amber' ? '🟡' : '🟢';
-  const dimLabel = { sector: 'Sector', region: 'Region', stock: 'Holdings' }[f.dimension] ?? f.dimension;
+  const dimLabel = { sector: 'Sector', region: 'Region', stock: 'Holdings', etf: 'ETF Holding' }[f.dimension] ?? f.dimension;
 
   let title, detail;
   if (f.status === 'green') {

@@ -33,10 +33,14 @@
       <p class="kv-divider-label">— or enter manually —</p>
 
       <div id="holdings-list"></div>
+      <div id="pct-remaining" class="kv-pct-remaining"></div>
       <button class="kv-btn kv-btn-ghost" id="btn-add-row">+ Add another holding</button>
 
       <details class="kv-thresholds" id="thresholds-details">
         <summary>Concentration Thresholds</summary>
+        <label>Single ETF max
+          <input type="text" inputmode="numeric" id="thresh-etf" value="30" class="kv-input-sm" /> %
+        </label>
         <label>Single stock max
           <input type="text" inputmode="numeric" id="thresh-stock" value="10" class="kv-input-sm" /> %
         </label>

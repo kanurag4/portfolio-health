@@ -33,6 +33,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   const assetClass    = {};
   const sector        = {};
   const region        = {};
+  const etfConc       = {};
   const stockConc     = {};
   const stockConcVia  = {}; // ticker -> Set of ETF tickers it came through
   const unresolved    = [];
@@ -42,6 +43,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
     const w = weights[h.ticker] ?? 0;
 
     if (h.quoteType === 'ETF') {
+      add(etfConc, h.ticker, w);
       add(assetClass, 'Equity',        w * (h.stockPosition ?? 1));
       add(assetClass, 'Fixed Income',  w * (h.bondPosition  ?? 0));
       add(assetClass, 'Cash',          w * (h.cashPosition  ?? 0));
@@ -90,6 +92,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   }
 
   const flags = [
+    ...buildDimFlags('etf', etfConc, thresholds.etf ?? 30),
     ...buildDimFlags('sector', sector, thresholds.sector),
     ...buildDimFlags('region', region, thresholds.region),
     ...buildStockFlags(stockConc, stockConcVia, thresholds.stock),
