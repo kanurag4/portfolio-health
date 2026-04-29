@@ -2,12 +2,23 @@ import { parseMoney } from './utils.js';
 import { fetchHolding, countryToRegion } from './data.js';
 import { analysePortfolio, normaliseWeights } from './analyse.js';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'portfoliohealth_v1';
 
 function defaultState() {
   return {
-    holdings: [{ ticker: '', inputMode: '%', value: '', isAsx: true }],
+    holdings: [{ ticker: '', inputMode: '%', value: null, isAsx: true }],
     thresholds: { etf: 30, stock: 10, sector: 30, region: 50 },
   };
 }
@@ -113,7 +124,7 @@ function buildRow(holding, index) {
   modeBtn.title = 'Toggle between $ amount and %';
   modeBtn.addEventListener('click', () => {
     state.holdings[index].inputMode = state.holdings[index].inputMode === '$' ? '%' : '$';
-    state.holdings[index].value = '';
+    state.holdings[index].value = null;
     saveState();
     renderHoldingsList(); // also calls updatePctRemaining
   });
@@ -123,11 +134,11 @@ function buildRow(holding, index) {
   amount.type = 'text';
   amount.inputMode = 'numeric';
   amount.placeholder = holding.inputMode === '$' ? 'Amount (AUD)' : 'Percentage';
-  amount.value = holding.value !== '' ? formatInputVal(holding.value) : '';
+  amount.value = holding.value != null ? formatInputVal(holding.value) : '';
   amount.addEventListener('input', e => {
     const raw = e.target.value.replace(/,/g, '');
     if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
-      state.holdings[index].value = raw === '' ? '' : Number(raw);
+      state.holdings[index].value = raw === '' ? null : Number(raw);
       const cursor = e.target.selectionStart;
       const formatted = raw === '' ? '' : Number(raw).toLocaleString('en-AU', { maximumFractionDigits: 2 });
       const oldLen = e.target.value.length;
@@ -322,9 +333,16 @@ function exportExcel() {
 let lastAnalysis = null;
 
 btnAnalyse.addEventListener('click', async () => {
-  const validHoldings = state.holdings.filter(h => h.ticker && h.value !== '' && Number(h.value) > 0);
+  const validHoldings = state.holdings.filter(h => h.ticker && h.value != null && Number(h.value) > 0);
   if (validHoldings.length === 0) {
     alert('Please add at least one holding with a ticker and amount.');
+    return;
+  }
+
+  const tickers = validHoldings.map(h => h.ticker);
+  const dupes = [...new Set(tickers.filter((t, i) => tickers.indexOf(t) !== i))];
+  if (dupes.length > 0) {
+    alert(`Duplicate tickers detected: ${dupes.join(', ')}. Please remove duplicates before analysing.`);
     return;
   }
 
@@ -405,11 +423,11 @@ function renderHoldingsTable(resolvedHoldings, rawWeights) {
     const w = weights[h.ticker] ?? 0;
     const tr = document.createElement('tr');
     if (h.error) {
-      tr.innerHTML = `<td>${h.ticker}</td><td>—</td><td>—</td><td>—</td><td colspan="2" style="color:var(--kv-fail)">Unresolved</td>`;
+      tr.innerHTML = `<td>${escapeHtml(h.ticker)}</td><td>—</td><td>—</td><td>—</td><td colspan="2" style="color:var(--kv-fail)">Unresolved</td>`;
     } else if (h.quoteType === 'ETF') {
       tr.innerHTML = `
-        <td>${h.ticker}</td>
-        <td>${h.name ?? '—'}</td>
+        <td>${escapeHtml(h.ticker)}</td>
+        <td>${h.name != null ? escapeHtml(h.name) : '—'}</td>
         <td>ETF</td>
         <td>${w.toFixed(1)}%</td>
         <td>Diversified</td>
@@ -417,11 +435,11 @@ function renderHoldingsTable(resolvedHoldings, rawWeights) {
       `;
     } else {
       tr.innerHTML = `
-        <td>${h.ticker}</td>
-        <td>${h.name ?? '—'}</td>
+        <td>${escapeHtml(h.ticker)}</td>
+        <td>${h.name != null ? escapeHtml(h.name) : '—'}</td>
         <td>Stock</td>
         <td>${w.toFixed(1)}%</td>
-        <td>${h.sector ?? '—'}</td>
+        <td>${h.sector != null ? escapeHtml(h.sector) : '—'}</td>
         <td>${countryToRegion(h.country)}</td>
       `;
     }
@@ -466,8 +484,8 @@ function buildFlagEl(f) {
     const verb = f.status === 'amber' ? 'approaching'
                : rounded === f.threshold ? 'meets'
                : 'exceeds';
-    const viaNote = f.via ? ` (via ${f.via})` : '';
-    title  = `${dimLabel} concentration — ${f.name}${viaNote}`;
+    const viaNote = f.via ? ` (via ${escapeHtml(f.via)})` : '';
+    title  = `${dimLabel} concentration — ${escapeHtml(f.name)}${viaNote}`;
     detail = `${f.value.toFixed(1)}% ${verb} your ${f.threshold}% threshold.`;
   }
 
@@ -504,6 +522,8 @@ function renderHBar(canvasId, buckets, threshold) {
 
   const labels = sorted.map(([k]) => k);
   const values = sorted.map(([, v]) => parseFloat(v.toFixed(1)));
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+  const yMax = Math.min(100, Math.ceil((Math.max(maxValue, threshold) + 5) / 10) * 10);
 
   const colors = values.map(v => {
     if (v >= threshold)       return 'rgba(239,68,68,0.75)';
@@ -550,7 +570,7 @@ function renderHBar(canvasId, buckets, threshold) {
         },
         y: {
           min: 0,
-          max: 100,
+          max: yMax,
           grid: { color: '#334155' },
           ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
         },

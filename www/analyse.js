@@ -44,9 +44,13 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
 
     if (h.quoteType === 'ETF') {
       add(etfConc, h.ticker, w);
-      add(assetClass, 'Equity',        w * (h.stockPosition ?? 1));
-      add(assetClass, 'Fixed Income',  w * (h.bondPosition  ?? 0));
-      add(assetClass, 'Cash',          w * (h.cashPosition  ?? 0));
+      const bondPct  = h.bondPosition  ?? 0;
+      const cashPct  = h.cashPosition  ?? 0;
+      if (h.stockPosition != null) add(assetClass, 'Equity', w * h.stockPosition);
+      add(assetClass, 'Fixed Income', w * bondPct);
+      add(assetClass, 'Cash',         w * cashPct);
+      const unclasAmt = w * Math.max(0, 1 - ((h.stockPosition ?? 0) + bondPct + cashPct));
+      if (unclasAmt > 0.01) add(assetClass, 'Unclassified', unclasAmt);
 
       if (h.sectorWeightings.length > 0) {
         for (const sw of h.sectorWeightings) {
