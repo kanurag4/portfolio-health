@@ -38,6 +38,22 @@ body {
 .kv-header-title-group {
   display: flex; align-items: center; gap: 12px;
 }
+.kv-theme-toggle {
+  position: absolute; right: 24px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--kv-border);
+  background: var(--kv-card);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--kv-muted);
+  transition: background 0.15s, border-color 0.15s;
+}
+.kv-theme-toggle:hover {
+  background: var(--kv-card-2);
+  border-color: var(--kv-accent);
+  color: var(--kv-text);
+}
 .kv-tool-icon { height: 40px; width: 40px; object-fit: contain; border-radius: 8px; }
 .kv-logo { height: 32px; }
 .kv-header-text h1 { font-size: 1.25rem; font-weight: 700; }
@@ -227,4 +243,14 @@ body {
 @media (max-width: 700px) {
   .kv-main { grid-template-columns: 1fr; }
   .kv-input-panel { border-right: none; border-bottom: 1px solid var(--kv-border); }
+}
+
+/* ── Light mode overrides ── */
+html:not(.dark) {
+  --kv-bg:     #f8fafc;
+  --kv-card:   #ffffff;
+  --kv-card-2: #f1f5f9;
+  --kv-text:   #0f172a;
+  --kv-muted:  #64748b;
+  --kv-border: #e2e8f0;
 }
