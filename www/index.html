@@ -3,8 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Portfolio Health — KashVector</title>
+  <meta name="theme-color" content="#0f172a">
+  <title>Portfolio Health Check — KashVector</title>
+  <meta name="description" content="Analyse your investment portfolio for sector, region, and stock concentration risk. Import from Excel or enter manually. Free portfolio health check — no sign-up, no data leaves your browser.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Portfolio Health Check",
+    "url": "https://kashvector.com/portfolio-health/",
+    "description": "Analyse your investment holdings for sector, region, and stock concentration risk with red/amber/green flags.",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "AUD" }
+  }
+  </script>
   <link rel="icon" type="image/svg+xml" href="../portfolio-health-icon.svg">
+  <link rel="canonical" href="https://kashvector.com/portfolio-health/">
   <link rel="stylesheet" href="style.css" />
   <script src="/kv-theme.js"></script>
   <!-- Chart.js -->
@@ -14,8 +29,9 @@
 </head>
 <body>
   <header class="kv-header kv-header--centered">
-    <a href="/" class="kv-logo-link">
+    <a href="/" class="kv-logo-link" aria-label="All KashVector tools">
       <img src="/logo.svg" alt="KashVector" class="kv-logo" />
+      <span class="home-logo-label">← All tools</span>
     </a>
     <div class="kv-header-title-group">
       <img src="../portfolio-health-icon.svg" alt="" class="kv-tool-icon" />
@@ -117,8 +133,35 @@
     </section>
   </main>
 
+  <section class="tool-info">
+    <div class="tool-about">
+      <h2>About this tool</h2>
+      <p>Portfolio Health Check analyses your investment holdings for concentration risk across sectors, regions, and individual stocks. Enter your holdings manually or import from Excel, and the tool flags anything above your chosen thresholds with red/amber/green indicators.</p>
+      <p>Built for Australian investors holding a mix of ETFs, shares, and other assets who want a quick sanity-check on diversification before or after rebalancing.</p>
+    </div>
+    <div class="tool-faq">
+      <h2>Frequently asked questions</h2>
+      <details class="faq-item">
+        <summary>What is concentration risk?</summary>
+        <p>Concentration risk is the danger of having too much of your portfolio in a single stock, sector, or region. If that holding falls sharply, a concentrated portfolio suffers far more than a diversified one. Most portfolio construction guidelines suggest no single stock should exceed 5–10% and no single sector more than 20–30% of your total holdings.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How does ETF look-through work?</summary>
+        <p>Rather than treating an ETF as a single holding, the tool fetches the ETF's underlying sector and region weightings from Yahoo Finance, then distributes its weight across those categories. This gives a more accurate picture of your real exposure — for example, an ASX 200 ETF brings significant financial sector concentration even though it looks like one line item.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I import my portfolio from my broker?</summary>
+        <p>Yes — download the Excel template, fill in your tickers and values (or percentages), and upload it. The template matches the column order expected by the importer. Most brokers let you export a holdings CSV which you can paste into the template.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Is my portfolio data stored anywhere?</summary>
+        <p>No. All analysis runs entirely in your browser. Your holdings are never sent to a server — only the ticker symbols are looked up via Yahoo Finance to fetch sector and region data. Nothing is stored or logged.</p>
+      </details>
+    </div>
+  </section>
+
   <footer class="kv-footer">
-    This tool is for educational purposes only and does not constitute financial advice.
+    This tool is for educational purposes only and does not constitute financial advice. &nbsp;·&nbsp; <a href="/">← All KashVector tools</a>
   </footer>
 
   <script type="module" src="app.js"></script>
