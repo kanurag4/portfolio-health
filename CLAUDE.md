@@ -126,11 +126,6 @@ The worker must have `topHoldings` in its MODULES list (added in Task 1, commit 
 # Copy built files to StockAnalysis for Cloudflare Pages deployment
 xcopy "www\*" "C:\Projects\StockAnalysis\www\portfolio-health\" /E /Y /I
 
-# The tool icon must also be present in the portfolio-health subdirectory
-# (it lives at StockAnalysis\www\portfoliohealth.png and is NOT copied by xcopy above)
-# Copy it once if it has changed:
-copy "C:\Projects\StockAnalysis\www\portfoliohealth.png" "C:\Projects\StockAnalysis\www\portfolio-health\portfoliohealth.png"
-
 # Then commit and push StockAnalysis
 cd C:\Projects\StockAnalysis
 git add www/portfolio-health/
@@ -140,7 +135,7 @@ git push
 
 Cloudflare Pages auto-deploys on push. Live at `kashvector.com/portfolio-health`.
 
-**Asset path note:** The tool page lives at `/portfolio-health/`, so `src="portfoliohealth.png"` resolves to `/portfolio-health/portfoliohealth.png`. The landing page card at `/` resolves the same `src` to `/portfoliohealth.png`. Both locations must have the file — see the xcopy note above.
+**Asset path note:** The tool icon is `portfolio-health-icon.svg`, which lives at the StockAnalysis `www/` root (`StockAnalysis\www\portfolio-health-icon.svg`). It is NOT inside the `portfolio-health/` subfolder and is not copied by xcopy. The tool page references it as `../portfolio-health-icon.svg` (resolves to `/portfolio-health-icon.svg` in production). The landing page card references it as `portfolio-health-icon.svg` (same file). Both pages show the same icon with no manual copy step needed.
 
 ## KashVector Design System
 
@@ -165,4 +160,4 @@ Key: `portfoliohealth_v1`. Persists `holdings[]` and `thresholds`. Forward-compa
 
 ## Implementation Status
 
-All tasks complete and live. The tool is deployed at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfoliohealth.png`).
+All tasks complete and live. The tool is deployed at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).
