@@ -18,7 +18,7 @@ function mergeHoldings(holdings) {
   for (const h of holdings) {
     const key = `${h.ticker}|${h.inputMode}`;
     if (merged.has(key)) {
-      merged.get(key).value += h.value;
+      merged.get(key).value += h.value; // name/notes from first row; subsequent rows contribute value only
     } else {
       merged.set(key, { ...h });
     }
@@ -352,6 +352,8 @@ btnAnalyse.addEventListener('click', async () => {
     return;
   }
 
+  // mergeHoldings must run before fetch — uniqueTickers is derived from the merged list,
+  // and normaliseWeights receives mergedHoldings so weights accumulate correctly per ticker.
   const mergedHoldings = mergeHoldings(validHoldings);
 
   btnAnalyse.textContent = 'Analysing…';
