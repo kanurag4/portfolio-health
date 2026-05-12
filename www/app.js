@@ -137,7 +137,7 @@ function buildRow(holding, index) {
   amount.value = holding.value != null ? formatInputVal(holding.value) : '';
   amount.addEventListener('input', e => {
     const raw = e.target.value.replace(/,/g, '');
-    if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+    if (raw === '' || /^\d*\.?\d{0,2}$/.test(raw)) {
       state.holdings[index].value = raw === '' ? null : Number(raw);
       const cursor = e.target.selectionStart;
       const formatted = raw === '' ? '' : Number(raw).toLocaleString('en-AU', { maximumFractionDigits: 2 });
