@@ -13,6 +13,19 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function mergeHoldings(holdings) {
+  const merged = new Map();
+  for (const h of holdings) {
+    const key = `${h.ticker}|${h.inputMode}`;
+    if (merged.has(key)) {
+      merged.get(key).value += h.value;
+    } else {
+      merged.set(key, { ...h });
+    }
+  }
+  return [...merged.values()];
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'portfoliohealth_v1';
 
@@ -339,25 +352,19 @@ btnAnalyse.addEventListener('click', async () => {
     return;
   }
 
-  const tickers = validHoldings.map(h => h.ticker);
-  const dupes = [...new Set(tickers.filter((t, i) => tickers.indexOf(t) !== i))];
-  if (dupes.length > 0) {
-    alert(`Duplicate tickers detected: ${dupes.join(', ')}. Please remove duplicates before analysing.`);
-    return;
-  }
+  const mergedHoldings = mergeHoldings(validHoldings);
 
   btnAnalyse.textContent = 'Analysing…';
   btnAnalyse.disabled = true;
 
   try {
-    const resolvedHoldings = await Promise.all(
-      validHoldings.map(h => fetchHolding(h.ticker))
-    );
+    const uniqueTickers = [...new Set(mergedHoldings.map(h => h.ticker))];
+    const resolvedHoldings = await Promise.all(uniqueTickers.map(t => fetchHolding(t)));
 
-    const analysis = analysePortfolio(resolvedHoldings, validHoldings, state.thresholds);
-    lastAnalysis = { resolvedHoldings, analysis, rawWeights: validHoldings };
+    const analysis = analysePortfolio(resolvedHoldings, mergedHoldings, state.thresholds);
+    lastAnalysis = { resolvedHoldings, analysis, rawWeights: mergedHoldings };
 
-    await renderResults(resolvedHoldings, analysis, validHoldings);
+    await renderResults(resolvedHoldings, analysis, mergedHoldings);
   } catch (err) {
     alert('Analysis failed: ' + err.message);
   } finally {

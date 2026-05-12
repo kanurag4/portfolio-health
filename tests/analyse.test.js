@@ -43,6 +43,21 @@ describe('normaliseWeights', () => {
   });
 });
 
+describe('normaliseWeights — same-ticker accumulation', () => {
+  it('accumulates weight when same ticker appears in both $ and % modes', () => {
+    // A appears as both $8000 (sole $ item → gets 80% of dollar slice)
+    // and as 20% (sole % item → gets all of percent slice = 20%)
+    const result = normaliseWeights([
+      { ticker: 'A', inputMode: '$', value: 8000 },
+      { ticker: 'A', inputMode: '%', value: 20 },
+    ]);
+    // percentSlice = 20, dollarSlice = 80 → A should total 100
+    assert.ok(Math.abs(result.weights['A'] - 100) < 0.01,
+      `Expected A ≈ 100, got ${result.weights['A']}`);
+    assert.equal(result.normalised, false);
+  });
+});
+
 describe('analysePortfolio — stock only', () => {
   const holdings = [
     { ticker: 'ASX.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },

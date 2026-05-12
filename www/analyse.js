@@ -12,10 +12,10 @@ export function normaliseWeights(rawWeights) {
 
   const weights = {};
   for (const w of percentItems) {
-    weights[w.ticker] = (w.value / (totalPercent || 1)) * percentSlice;
+    weights[w.ticker] = (weights[w.ticker] ?? 0) + (w.value / (totalPercent || 1)) * percentSlice;
   }
   for (const w of dollarItems) {
-    weights[w.ticker] = (w.value / (totalDollars || 1)) * dollarSlice;
+    weights[w.ticker] = (weights[w.ticker] ?? 0) + (w.value / (totalDollars || 1)) * dollarSlice;
   }
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
