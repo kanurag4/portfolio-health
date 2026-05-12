@@ -420,7 +420,7 @@ async function renderResults(resolvedHoldings, analysis, rawWeights) {
 
   renderHoldingsTable(resolvedHoldings, rawWeights);
   renderFlags(analysis.flags);
-  renderCharts(analysis);
+  renderCharts(analysis, resolvedHoldings, rawWeights);
 }
 
 function renderHoldingsTable(resolvedHoldings, rawWeights) {
@@ -511,10 +511,96 @@ function buildFlagEl(f) {
 // ── Charts ────────────────────────────────────────────────────────────────────
 const chartInstances = {};
 
-function renderCharts(analysis) {
+function renderCharts(analysis, resolvedHoldings, rawWeights) {
+  renderWaterfallChart('chart-holdings', resolvedHoldings, rawWeights, state.thresholds);
   renderHBar('chart-asset',  analysis.assetClass, 100);
   renderHBar('chart-sector', analysis.sector,     state.thresholds.sector);
   renderHBar('chart-region', analysis.region,     state.thresholds.region);
+}
+
+function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  if (chartInstances[canvasId]) {
+    chartInstances[canvasId].destroy();
+  }
+
+  const { weights } = normaliseWeights(rawWeights);
+
+  const items = resolvedHoldings
+    .filter(h => !h.error)
+    .map(h => ({ ticker: h.ticker, weight: weights[h.ticker] ?? 0, quoteType: h.quoteType }))
+    .filter(h => h.weight > 0.1)
+    .sort((a, b) => b.weight - a.weight);
+
+  const labels = items.map(h => h.ticker);
+  const data = [];
+  const colors = [];
+  let cumulative = 0;
+
+  for (const item of items) {
+    const start = parseFloat(cumulative.toFixed(2));
+    const end   = parseFloat((cumulative + item.weight).toFixed(2));
+    data.push([start, end]);
+    cumulative += item.weight;
+
+    const thr = item.quoteType === 'ETF' ? (thresholds.etf ?? 30) : (thresholds.stock ?? 10);
+    if (item.weight >= thr)       colors.push('rgba(239,68,68,0.75)');
+    else if (item.weight >= thr - 2) colors.push('rgba(245,158,11,0.75)');
+    else                           colors.push('rgba(34,197,94,0.75)');
+  }
+
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.replace('0.75', '1')),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const [start, end] = ctx.raw;
+              return ` ${(end - start).toFixed(1)}%`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: '#f1f5f9',
+            font: { size: 11 },
+            maxRotation: 35,
+            minRotation: 0,
+            callback(val) {
+              const lbl = this.getLabelForValue(val);
+              return lbl.length > 14 ? lbl.slice(0, 13) + '…' : lbl;
+            },
+          },
+        },
+        y: {
+          min: 0,
+          max: 100,
+          grid: { color: '#334155' },
+          ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
+          afterFit: scale => { scale.width = 88; },
+        },
+      },
+    },
+  });
 }
 
 function renderHBar(canvasId, buckets, threshold) {
