@@ -7,7 +7,7 @@ Enter your investment holdings (ETFs, stocks, or a mix); the tool fetches live d
 ## Features
 
 - **ETF look-through** — unpacks each ETF's top-10 holdings to show true sector and region exposure
-- **Multi-dimension concentration flags** — ETF, sector, region, and stock level (red ≥ threshold, amber within 5%)
+- **Multi-dimension concentration flags** — ETF, sector, region, and stock level (red ≥ threshold, amber within 2%)
 - **Mixed $ / % input** — freely mix dollar amounts and percentages per row; weights are normalised automatically
 - **Excel import / export** — download a pre-filled template or import an existing spreadsheet
 - **Customisable thresholds** — per-dimension, persisted to localStorage

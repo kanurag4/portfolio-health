@@ -80,7 +80,7 @@ Users can mix `$` and `%` inputs per row. `normaliseWeights()` resolves this: `%
 
 Four dimensions — `etf`, `sector`, `region`, `stock` — each produce flags:
 - **Red**: value ≥ threshold (rounded to 1 dp before comparison to absorb floating-point drift)
-- **Amber**: value ≥ threshold − 5%
+- **Amber**: value ≥ threshold − 2%
 - **Green**: one summary flag per dimension when nothing breaches amber
 
 Default thresholds (user-overridable, persisted to localStorage):
