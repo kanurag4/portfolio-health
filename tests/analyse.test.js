@@ -147,7 +147,7 @@ describe('analysePortfolio — ETF look-through', () => {
 
   it('registers top-holding concentration correctly', () => {
     const { flags } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
-    // CBA = 4%, BHP = 3% — both < 5% (threshold - 5), so green stock flag
+    // CBA = 4%, BHP = 3% — both < 8% (threshold - 2 = 10-2), so green stock flag
     const greenStock = flags.find(f => f.dimension === 'stock' && f.status === 'green');
     assert.ok(greenStock);
   });

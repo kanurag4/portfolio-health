@@ -527,7 +527,7 @@ function renderHBar(canvasId, buckets, threshold) {
 
   const colors = values.map(v => {
     if (v >= threshold)       return 'rgba(239,68,68,0.75)';
-    if (v >= threshold - 5)   return 'rgba(245,158,11,0.75)';
+    if (v >= threshold - 2)   return 'rgba(245,158,11,0.75)';
     return 'rgba(34,197,94,0.75)';
   });
 

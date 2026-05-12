@@ -113,7 +113,7 @@ function add(obj, key, value) {
 function flagStatus(value, threshold) {
   const v = Math.round(value * 10) / 10; // round to 1 dp to avoid floating-point drift
   if (v >= threshold) return 'red';
-  if (v >= threshold - 5) return 'amber';
+  if (v >= threshold - 2) return 'amber';
   return null;
 }
 
