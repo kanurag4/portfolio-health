@@ -1,5 +1,9 @@
 import { countryToRegion, regionFromTicker, SECTOR_LABELS, EQUITY_SECTOR_NORMALIZE } from './data.js';
 
+// Scoring model: 4 dimensions × 25 pts each = 100 max.
+// Per dimension: 25 − (redCount × 10) − (amberCount × 5), floored at 0.
+// A dimension with zero flags (e.g. no ETFs in portfolio) scores 25 (neutral — not penalised).
+// Green flags contribute 0 deductions; only red/amber matter.
 export function scorePortfolio(flags) {
   const DIMENSIONS = ['stock', 'sector', 'region', 'etf'];
   const scores = {};

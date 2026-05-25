@@ -410,6 +410,11 @@ html:not(.dark) {
   font-size: 0.9rem;
   color: var(--kv-pass);
 }
+.kv-overlap-note {
+  font-size: 0.78rem;
+  color: var(--kv-muted);
+  margin-top: 4px;
+}
 .kv-overlap-pair {
   border-top: 1px solid var(--kv-border);
   padding: 12px 0 8px;

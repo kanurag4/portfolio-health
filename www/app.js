@@ -423,7 +423,14 @@ async function renderResults(resolvedHoldings, analysis, rawWeights) {
 
   renderHoldingsTable(resolvedHoldings, rawWeights);
   renderFlags(analysis.flags);
-  renderScoreCard(scorePortfolio(analysis.flags));
+
+  const scoreCardEl = document.getElementById('score-card');
+  if (resolved.length === 0) {
+    scoreCardEl.hidden = true; // all holdings errored — a perfect score would be misleading
+  } else {
+    renderScoreCard(scorePortfolio(analysis.flags));
+  }
+
   renderOverlapCard(detectOverlap(resolvedHoldings, normaliseWeights(rawWeights)), etfCount);
   renderCharts(analysis, resolvedHoldings, rawWeights);
 }
@@ -503,6 +510,9 @@ function buildFlagEl(f) {
     detail = `${f.value.toFixed(1)}% ${verb} your ${f.threshold}% threshold.`;
   }
 
+  // Trust invariant: `title` contains only escapeHtml()-escaped strings and trusted emoji/literals.
+  // `detail` contains only number literals (.toFixed) and trusted string literals — no user input.
+  // Any new field added to a flag object that reaches innerHTML here MUST be passed through escapeHtml().
   el.innerHTML = `
     <span class="kv-flag-icon">${icon}</span>
     <div>
@@ -552,7 +562,7 @@ function renderOverlapCard(overlaps, etfCount) {
   if (etfCount < 2) { el.hidden = true; return; }
 
   if (overlaps.length === 0) {
-    el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3><p class="kv-overlap-none">🟢 No shared top-10 holdings between your ETFs.</p></div>`;
+    el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3><p class="kv-overlap-none">🟢 No shared top-10 holdings between your ETFs.</p><p class="kv-overlap-note">Only ETFs with available top-10 data are compared.</p></div>`;
     el.hidden = false;
     return;
   }
@@ -576,7 +586,7 @@ function renderOverlapCard(overlaps, etfCount) {
           </div>`).join('')}
       </div>`).join('');
 
-  el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3>${pairsHtml}</div>`;
+  el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3><p class="kv-overlap-note">Weights shown are each holding's share <em>within</em> the ETF, not your whole portfolio.</p>${pairsHtml}</div>`;
   el.hidden = false;
 }
 
@@ -598,9 +608,9 @@ function openDrillPanel(label, dimension) {
         .sort((a, b) => b.contribution - a.contribution)
         .map(c => `
           <div class="drill-contrib-row">
-            <span>${escapeHtml(c.ticker)}</span>
-            <span class="drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
-            <span>${c.contribution.toFixed(1)}%</span>
+            <span class="drill-contrib-ticker">${escapeHtml(c.ticker)}</span>
+            <span class="drill-contrib-type drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
+            <span class="drill-contrib-pct">${c.contribution.toFixed(1)}%</span>
           </div>`).join('')}`;
   } else if (dimension === 'region') {
     const contribs = analysis.regionContributions[label] ?? [];
@@ -612,9 +622,9 @@ function openDrillPanel(label, dimension) {
         .sort((a, b) => b.contribution - a.contribution)
         .map(c => `
           <div class="drill-contrib-row">
-            <span>${escapeHtml(c.ticker)}</span>
-            <span class="drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
-            <span>${c.contribution.toFixed(1)}%</span>
+            <span class="drill-contrib-ticker">${escapeHtml(c.ticker)}</span>
+            <span class="drill-contrib-type drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
+            <span class="drill-contrib-pct">${c.contribution.toFixed(1)}%</span>
           </div>`).join('')}`;
   } else if (dimension === 'holdings') {
     const h = resolvedHoldings.find(r => r.ticker === label);
