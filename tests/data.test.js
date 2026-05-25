@@ -40,9 +40,32 @@ describe('classifyQuoteType', () => {
   it('classifies EQUITY', ()       => assert.equal(classifyQuoteType('EQUITY'),       'EQUITY'));
   it('returns null for INDEX', ()  => assert.equal(classifyQuoteType('INDEX'),         null));
   it('returns null for CURRENCY',  () => assert.equal(classifyQuoteType('CURRENCY'),   null));
-  it('returns null for CRYPTOCURRENCY', () => assert.equal(classifyQuoteType('CRYPTOCURRENCY'), null));
+  it('classifies CRYPTOCURRENCY as CRYPTO', () => assert.equal(classifyQuoteType('CRYPTOCURRENCY'), 'CRYPTO'));
   it('returns null for OPTION',    () => assert.equal(classifyQuoteType('OPTION'),     null));
   it('returns null for unknown type', () => assert.equal(classifyQuoteType('FUTURE'),  null));
+});
+
+describe('fetchHolding — cryptocurrency', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('returns CRYPTO quoteType for CRYPTOCURRENCY instruments', async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        quoteSummary: {
+          result: [{ quoteType: { quoteType: 'CRYPTOCURRENCY', longName: 'Bitcoin USD' } }],
+        },
+      }),
+    });
+    const result = await fetchHolding('BTC-USD');
+    assert.equal(result.error, false);
+    assert.equal(result.quoteType, 'CRYPTO');
+    assert.equal(result.ticker, 'BTC-USD');
+  });
 });
 
 describe('fetchHolding — defensive ETF weights', () => {

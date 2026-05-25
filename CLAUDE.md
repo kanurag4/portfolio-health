@@ -49,7 +49,8 @@ tests/        # Node built-in test runner (no npm install needed)
 3. `data.js` detects `quoteType` from Yahoo response via `classifyQuoteType()`:
    - **EQUITY**: returns `{ ticker, quoteType, sector, industry, country }`
    - **ETF / MUTUALFUND**: returns `{ ticker, quoteType: 'ETF', topHoldings[], sectorWeightings[], countryWeightings[], stockPosition, bondPosition, cashPosition }`
-   - **Unsupported** (INDEX, CURRENCY, CRYPTOCURRENCY, OPTION, etc.): returns `{ ticker, error: true, message }`
+   - **CRYPTOCURRENCY**: returns `{ ticker, quoteType: 'CRYPTO', name }` — bucketed as asset class `Cryptocurrency`, sector `Cryptocurrency`, region `Global`
+   - **Unsupported** (INDEX, CURRENCY, OPTION, etc.): returns `{ ticker, error: true, message }`
    - **Error**: returns `{ ticker, error: true, message }`
 4. `analysePortfolio()` aggregates all holdings into `assetClass`, `sector`, `region`, `etfConc` buckets and produces `flags[]`, `sectorContributions`, and `regionContributions`
 5. `app.js` renders charts (Chart.js vertical bars), flags, health score card, overlap card, and holdings table. Chart bars are clickable — they open the drill-down panel via `openDrillPanel(label, dimension)`
@@ -230,7 +231,7 @@ Key: `portfoliohealth_v1`. Persists `holdings[]` and `thresholds`. Forward-compa
 
 ## Implementation Status
 
-All features complete and live. Tests: 101 pass, 0 fail.
+All features complete and live. Tests: 106 pass, 0 fail.
 
 **Shipped:**
 - Concentration flags (red/amber/green) across ETF, sector, region, stock dimensions
@@ -241,5 +242,6 @@ All features complete and live. Tests: 101 pass, 0 fail.
 - FAQ and About section updated to explain all features
 - Four peer-review defect fixes: unresolved holdings now flow into explicit Unresolved buckets (sector/region/assetClass) and trigger concentration flags; ETF holdingPercent values sanitised via `safePct()` before aggregation; `sectorWeightings ?? []` guard prevents crash on missing ETF sector data; lowercase ticker suffixes (e.g. `.ax`) now matched case-insensitively in `regionFromTicker()`
 - Export now includes `IsASX` column for round-trip fidelity on no-suffix tickers
+- Cryptocurrency support: `CRYPTOCURRENCY` quoteType now resolves to asset class `Cryptocurrency`, sector `Cryptocurrency`, region `Global` — appears in all charts and triggers stock concentration flags
 
 The tool is live at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).

@@ -160,6 +160,13 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
         covered += topWeight;
       }
       if (covered < 1) add(stockConc, `${h.ticker} (rest)`, w * (1 - covered));
+    } else if (h.quoteType === 'CRYPTO') {
+      add(assetClass, 'Cryptocurrency', w);
+      add(sector, 'Cryptocurrency', w);
+      addContrib(sectorContributions, 'Cryptocurrency', h.ticker, w, 'direct');
+      add(region, 'Global', w);
+      addContrib(regionContributions, 'Global', h.ticker, w, 'direct');
+      add(stockConc, h.ticker, w);
     } else {
       add(assetClass, 'Equity', w);
       const sectorName = EQUITY_SECTOR_NORMALIZE[h.sector] ?? h.sector ?? 'Unclassified';

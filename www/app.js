@@ -446,6 +446,15 @@ function renderHoldingsTable(resolvedHoldings, rawWeights) {
     const tr = document.createElement('tr');
     if (h.error) {
       tr.innerHTML = `<td>${escapeHtml(h.ticker)}</td><td>—</td><td>—</td><td>—</td><td colspan="2" style="color:var(--kv-fail)">Unresolved</td>`;
+    } else if (h.quoteType === 'CRYPTO') {
+      tr.innerHTML = `
+        <td>${escapeHtml(h.ticker)}</td>
+        <td>${h.name != null ? escapeHtml(h.name) : '—'}</td>
+        <td>Crypto</td>
+        <td>${w.toFixed(1)}%</td>
+        <td>Cryptocurrency</td>
+        <td>Global</td>
+      `;
     } else if (h.quoteType === 'ETF') {
       tr.innerHTML = `
         <td>${escapeHtml(h.ticker)}</td>

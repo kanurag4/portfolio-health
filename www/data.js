@@ -83,6 +83,7 @@ export function regionFromTicker(ticker) {
 export function classifyQuoteType(quoteType) {
   if (quoteType === 'ETF' || quoteType === 'MUTUALFUND') return 'ETF';
   if (quoteType === 'EQUITY') return 'EQUITY';
+  if (quoteType === 'CRYPTOCURRENCY') return 'CRYPTO';
   return null;
 }
 
@@ -108,8 +109,12 @@ export async function fetchHolding(ticker) {
     if (classified === null) {
       return {
         ticker: symbol, error: true,
-        message: `"${symbol}" is a ${rawQuoteType?.toLowerCase() ?? 'unsupported'} instrument — only equities and ETFs are supported.`,
+        message: `"${symbol}" is a ${rawQuoteType?.toLowerCase() ?? 'unsupported'} instrument — only equities, ETFs, and cryptocurrencies are supported.`,
       };
+    }
+
+    if (classified === 'CRYPTO') {
+      return { ticker: symbol, name, quoteType: 'CRYPTO', error: false };
     }
 
     if (classified === 'ETF') {

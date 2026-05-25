@@ -59,6 +59,40 @@ describe('normaliseWeights — same-ticker accumulation', () => {
   });
 });
 
+describe('analysePortfolio — cryptocurrency', () => {
+  const holdings = [
+    { ticker: 'BTC-USD', quoteType: 'CRYPTO', error: false, name: 'Bitcoin USD' },
+    { ticker: 'CBA.AX',  quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+  ];
+  const rawWeights = [
+    { ticker: 'BTC-USD', inputMode: '$', value: 3000 },
+    { ticker: 'CBA.AX',  inputMode: '$', value: 7000 },
+  ];
+
+  it('buckets crypto into Cryptocurrency asset class', () => {
+    const { assetClass } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(assetClass['Cryptocurrency'] - 30) < 0.1);
+    assert.ok(Math.abs(assetClass['Equity'] - 70) < 0.1);
+  });
+
+  it('buckets crypto sector as Cryptocurrency', () => {
+    const { sector } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(sector['Cryptocurrency'] - 30) < 0.1);
+  });
+
+  it('buckets crypto region as Global', () => {
+    const { region } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    assert.ok(Math.abs(region['Global'] - 30) < 0.1);
+  });
+
+  it('includes crypto in stock concentration', () => {
+    const { flags } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
+    const cryptoFlag = flags.find(f => f.dimension === 'stock' && f.name === 'BTC-USD');
+    assert.ok(cryptoFlag, 'BTC-USD should appear in stock concentration flags');
+    assert.equal(cryptoFlag.status, 'red'); // 30% > 10% threshold
+  });
+});
+
 describe('analysePortfolio — stock only', () => {
   const holdings = [
     { ticker: 'ASX.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
