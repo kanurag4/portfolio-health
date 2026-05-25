@@ -188,6 +188,16 @@
         <p>When two ETFs both hold the same underlying stocks, adding more of either fund does not improve diversification as much as you might expect. The ETF Overlap card compares the top-10 holdings of every ETF pair in your portfolio and shows the tickers they share. The weights displayed are each holding's share <em>within</em> that ETF, not your whole portfolio. Only ETFs with available top-10 data from Yahoo Finance are compared.</p>
       </details>
       <details class="faq-item">
+        <summary>What ticker formats are supported?</summary>
+        <p>The tool accepts any ticker that Yahoo Finance recognises. Common formats: ASX stocks and ETFs use a <code>.AX</code> suffix (e.g. <code>CBA.AX</code>, <code>VAS.AX</code>); US stocks and ETFs have no suffix (e.g. <code>AAPL</code>, <code>VOO</code>); London Stock Exchange uses <code>.L</code> (e.g. <code>SHEL.L</code>); Indian NSE uses <code>.NS</code>.</p>
+        <p>Cryptocurrencies use the <code>{COIN}-USD</code> format — for example <code>BTC-USD</code> for Bitcoin, <code>ETH-USD</code> for Ethereum, <code>SOL-USD</code> for Solana. Entering just <code>BTC</code> may silently resolve to a different security on Yahoo Finance, so always include the <code>-USD</code> suffix for crypto.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Is cryptocurrency supported?</summary>
+        <p>Yes. Crypto holdings are treated as their own asset class — they appear as <strong>Cryptocurrency</strong> in the asset class chart, under a <strong>Cryptocurrency</strong> sector, and in the <strong>Global</strong> region. They are also subject to stock concentration flags, so a large crypto position will trigger a red flag if it exceeds your single-holding threshold.</p>
+        <p>Use Yahoo Finance's <code>{COIN}-USD</code> ticker format: <code>BTC-USD</code>, <code>ETH-USD</code>, <code>SOL-USD</code>, etc.</p>
+      </details>
+      <details class="faq-item">
         <summary>Can I import my portfolio from my broker?</summary>
         <p>Yes — download the Excel template, fill in your tickers and values (or percentages), and upload it. The template matches the column order expected by the importer. Most brokers let you export a holdings CSV which you can paste into the template.</p>
       </details>
