@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { normaliseWeights, analysePortfolio } from '../www/analyse.js';
+import { clampThreshold } from '../www/utils.js';
 
 const DEFAULT_THRESHOLDS = { stock: 10, sector: 30, region: 50 };
 
@@ -299,5 +300,155 @@ describe('analysePortfolio — Yahoo {raw,fmt} countryWeightings', () => {
     const { region } = analysePortfolio(holdings, rawWeights, DEFAULT_THRESHOLDS);
     assert.ok(Math.abs(region['United States'] - 65) < 0.1);
     assert.ok(Math.abs(region['International Developed'] - 7) < 0.1);
+  });
+});
+
+// ── Bug 1: sector bucket split between ETF and direct-stock holdings ──────────
+describe('analysePortfolio — sector normalisation for equity holdings', () => {
+  it('merges Yahoo "Financial Services" equity sector with ETF financial_services into one Financials bucket', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financial Services', country: 'Australia', error: false },
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        stockPosition: 1, bondPosition: 0, cashPosition: 0,
+        topHoldings: [],
+        sectorWeightings: [{ financial_services: 0.25 }],
+        countryWeightings: [],
+      },
+    ];
+    // CBA = 20%: "Financial Services" must map to "Financials"
+    // VAS = 80%: financial_services 0.25 → 20% "Financials"
+    // Combined = 40%
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '%', value: 20 },
+      { ticker: 'VAS.AX', inputMode: '%', value: 80 },
+    ];
+    const { sector } = analysePortfolio(holdings, rawWeights, { stock: 10, sector: 30, region: 50 });
+    assert.ok(Math.abs(sector['Financials'] - 40) < 0.1, `Expected ~40, got ${sector['Financials']}`);
+    assert.equal(sector['Financial Services'], undefined, '"Financial Services" bucket must not exist separately');
+  });
+
+  it('flags financials as red when combined equity+ETF exposure breaches threshold', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financial Services', country: 'Australia', error: false },
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        stockPosition: 1, bondPosition: 0, cashPosition: 0,
+        topHoldings: [],
+        sectorWeightings: [{ financial_services: 0.25 }],
+        countryWeightings: [],
+      },
+    ];
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '%', value: 20 },
+      { ticker: 'VAS.AX', inputMode: '%', value: 80 },
+    ];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const finFlag = flags.find(f => f.dimension === 'sector' && f.name === 'Financials');
+    assert.ok(finFlag, 'Financials sector flag should exist');
+    assert.equal(finFlag.status, 'red'); // 40% > 30% threshold
+  });
+});
+
+// ── Bug 2: over-100% percent inputs silently rescaled without normalised flag ─
+describe('normaliseWeights — over-100% percent inputs', () => {
+  it('sets normalised=true when percent inputs sum to 140', () => {
+    const result = normaliseWeights([
+      { ticker: 'A', inputMode: '%', value: 80 },
+      { ticker: 'B', inputMode: '%', value: 60 },
+    ]);
+    assert.equal(result.normalised, true);
+  });
+
+  it('sets normalised=true when percent inputs over 100 are mixed with dollar inputs', () => {
+    const result = normaliseWeights([
+      { ticker: 'A', inputMode: '%', value: 80 },
+      { ticker: 'B', inputMode: '%', value: 60 },
+      { ticker: 'C', inputMode: '$', value: 1000 },
+    ]);
+    assert.equal(result.normalised, true);
+  });
+});
+
+// ── Bug 5: green ETF flag emitted even when portfolio has no ETFs ─────────────
+describe('analysePortfolio — ETF flags suppressed for stock-only portfolio', () => {
+  it('emits no ETF dimension flag when portfolio has no ETFs', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [{ ticker: 'CBA.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const etfFlags = flags.filter(f => f.dimension === 'etf');
+    assert.equal(etfFlags.length, 0, 'No ETF flags should exist for a stock-only portfolio');
+  });
+
+  it('still emits green ETF flag when ETFs are present and all below threshold', () => {
+    const mkEtf = ticker => ({
+      ticker, quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], sectorWeightings: [], countryWeightings: [],
+    });
+    // Four ETFs at 25% each — all below etf threshold of 30%
+    const holdings = [mkEtf('VAS.AX'), mkEtf('VGS.AX'), mkEtf('VAF.AX'), mkEtf('VGE.AX')];
+    const rawWeights = [
+      { ticker: 'VAS.AX', inputMode: '%', value: 25 },
+      { ticker: 'VGS.AX', inputMode: '%', value: 25 },
+      { ticker: 'VAF.AX', inputMode: '%', value: 25 },
+      { ticker: 'VGE.AX', inputMode: '%', value: 25 },
+    ];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const greenEtf = flags.find(f => f.dimension === 'etf' && f.status === 'green');
+    assert.ok(greenEtf, 'Green ETF flag should exist when ETFs are present and all below threshold');
+  });
+});
+
+// ── Minor #2: green stock flag count inflated by (rest) pseudo-entries ─────────
+describe('analysePortfolio — green stock flag count excludes (rest) entries', () => {
+  it('counts only real stock tickers, not (rest) pseudo-entries, in green stock flag', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [
+        { ticker: 'CBA.AX', name: 'CBA', weight: 0.05 },
+        { ticker: 'BHP.AX', name: 'BHP', weight: 0.04 },
+        // covered = 0.09; rest = 0.91 → "VAS.AX (rest)" added to stockConc
+      ],
+      sectorWeightings: [],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const greenStock = flags.find(f => f.dimension === 'stock' && f.status === 'green');
+    assert.ok(greenStock, 'Green stock flag should exist when no stock breaches threshold');
+    // stockConc has CBA.AX, BHP.AX, and "VAS.AX (rest)" — only 2 are real tickers
+    assert.equal(greenStock.count, 2, `count should be 2 real tickers, got ${greenStock.count}`);
+  });
+});
+
+// ── Minor #5: integration test — out-of-range threshold masked by clamping ────
+describe('analysePortfolio — threshold clamping integration', () => {
+  it('threshold 999 masks 100% single-ETF concentration as green (demonstrates why clamping is required)', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], sectorWeightings: [], countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 999, stock: 10, sector: 30, region: 50 });
+    const greenEtf = flags.find(f => f.dimension === 'etf' && f.status === 'green');
+    assert.ok(greenEtf, 'Unclamped threshold of 999 masks 100% ETF as green — loadState must clamp before use');
+  });
+
+  it('clamping threshold 999 to 100 via clampThreshold correctly flags 100% single ETF as red', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], sectorWeightings: [], countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: clampThreshold(999), stock: 10, sector: 30, region: 50 });
+    const vasFlag = flags.find(f => f.dimension === 'etf' && f.name === 'VAS.AX');
+    assert.ok(vasFlag, 'VAS.AX ETF flag should exist');
+    assert.equal(vasFlag.status, 'red', 'After clamping to 100, 100% ETF must be red');
   });
 });

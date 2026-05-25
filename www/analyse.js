@@ -1,4 +1,4 @@
-import { countryToRegion, regionFromTicker, SECTOR_LABELS } from './data.js';
+import { countryToRegion, regionFromTicker, SECTOR_LABELS, EQUITY_SECTOR_NORMALIZE } from './data.js';
 
 export function normaliseWeights(rawWeights) {
   const percentItems = rawWeights.filter(w => w.inputMode === '%');
@@ -7,6 +7,7 @@ export function normaliseWeights(rawWeights) {
   const totalPercent = percentItems.reduce((s, w) => s + w.value, 0);
   const totalDollars  = dollarItems.reduce((s, w) => s + w.value, 0);
 
+  const overAllocated = totalPercent > 100 + 0.5; // percent rows alone exceed 100%
   const percentSlice = Math.min(totalPercent, 100);
   const dollarSlice  = 100 - percentSlice;
 
@@ -19,7 +20,7 @@ export function normaliseWeights(rawWeights) {
   }
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
-  const normalised = Math.abs(total - 100) > 0.5; // 0.5% tolerance to absorb fp drift
+  const normalised = overAllocated || Math.abs(total - 100) > 0.5;
   if (normalised && total > 0) {
     for (const k of Object.keys(weights)) weights[k] = (weights[k] / total) * 100;
   }
@@ -89,7 +90,7 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       if (covered < 1) add(stockConc, `${h.ticker} (rest)`, w * (1 - covered));
     } else {
       add(assetClass, 'Equity', w);
-      add(sector, h.sector ?? 'Unclassified', w);
+      add(sector, EQUITY_SECTOR_NORMALIZE[h.sector] ?? h.sector ?? 'Unclassified', w);
       add(region, countryToRegion(h.country), w);
       add(stockConc, h.ticker, w);
     }
@@ -123,7 +124,7 @@ function buildDimFlags(dimension, buckets, threshold) {
     const status = flagStatus(value, threshold);
     if (status) flags.push({ dimension, name, value, threshold, status });
   }
-  if (flags.length === 0) {
+  if (flags.length === 0 && Object.keys(buckets).length > 0) {
     flags.push({ dimension, name: 'all', value: null, threshold, status: 'green',
                  count: Object.keys(buckets).length });
   }
@@ -139,8 +140,9 @@ function buildStockFlags(stockConc, stockConcVia, threshold) {
     if (status) flags.push({ dimension: 'stock', name, value, threshold, status, via });
   }
   if (flags.length === 0) {
+    const realCount = Object.keys(stockConc).filter(k => !k.endsWith('(rest)')).length;
     flags.push({ dimension: 'stock', name: 'all', value: null, threshold, status: 'green',
-                 count: Object.keys(stockConc).length });
+                 count: realCount });
   }
   return flags;
 }

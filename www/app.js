@@ -1,4 +1,4 @@
-import { parseMoney } from './utils.js';
+import { parseMoney, clampThreshold } from './utils.js';
 import { fetchHolding, countryToRegion } from './data.js';
 import { analysePortfolio, normaliseWeights } from './analyse.js';
 
@@ -45,7 +45,10 @@ function loadState() {
     const parsed = JSON.parse(raw);
     return {
       holdings: (parsed.holdings ?? defaultState().holdings).map(h => ({ ...h, isAsx: h.isAsx ?? true })),
-      thresholds: { ...defaultState().thresholds, ...(parsed.thresholds ?? {}) },
+      thresholds: Object.fromEntries(
+        Object.entries({ ...defaultState().thresholds, ...(parsed.thresholds ?? {}) })
+          .map(([k, v]) => [k, clampThreshold(Number(v) || defaultState().thresholds[k])])
+      ),
     };
   } catch {
     return defaultState();
@@ -200,7 +203,7 @@ function renderThresholds() {
 
 [threshEtf, threshStock, threshSector, threshRegion].forEach(el => {
   el.addEventListener('change', () => {
-    const parse = v => { const n = parseMoney(v); return isFinite(n) && n > 0 ? n : null; };
+    const parse = v => { const n = parseMoney(v); return isFinite(n) && n >= 1 && n <= 100 ? n : null; };
     state.thresholds.etf    = parse(threshEtf.value)    ?? state.thresholds.etf;
     state.thresholds.stock  = parse(threshStock.value)  ?? state.thresholds.stock;
     state.thresholds.sector = parse(threshSector.value) ?? state.thresholds.sector;

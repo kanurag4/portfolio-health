@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { countryToRegion, regionFromTicker, SECTOR_LABELS } from '../www/data.js';
+import { countryToRegion, regionFromTicker, SECTOR_LABELS, classifyQuoteType } from '../www/data.js';
 
 describe('countryToRegion', () => {
   it('maps Australia', () => assert.equal(countryToRegion('Australia'), 'Australia'));
@@ -30,4 +30,16 @@ describe('SECTOR_LABELS', () => {
   it('maps realestate', () => assert.equal(SECTOR_LABELS['realestate'], 'Real Estate'));
   it('maps consumer_cyclical', () => assert.equal(SECTOR_LABELS['consumer_cyclical'], 'Consumer Cyclical'));
   it('maps technology', () => assert.equal(SECTOR_LABELS['technology'], 'Technology'));
+});
+
+// ── Bug 4: non-ETF/equity quote types fall through to EQUITY silently ─────────
+describe('classifyQuoteType', () => {
+  it('classifies ETF', ()          => assert.equal(classifyQuoteType('ETF'),          'ETF'));
+  it('classifies MUTUALFUND as ETF', () => assert.equal(classifyQuoteType('MUTUALFUND'), 'ETF'));
+  it('classifies EQUITY', ()       => assert.equal(classifyQuoteType('EQUITY'),       'EQUITY'));
+  it('returns null for INDEX', ()  => assert.equal(classifyQuoteType('INDEX'),         null));
+  it('returns null for CURRENCY',  () => assert.equal(classifyQuoteType('CURRENCY'),   null));
+  it('returns null for CRYPTOCURRENCY', () => assert.equal(classifyQuoteType('CRYPTOCURRENCY'), null));
+  it('returns null for OPTION',    () => assert.equal(classifyQuoteType('OPTION'),     null));
+  it('returns null for unknown type', () => assert.equal(classifyQuoteType('FUTURE'),  null));
 });

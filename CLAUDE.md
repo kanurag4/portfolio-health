@@ -23,8 +23,8 @@ No build step. Open `www/index.html` directly via a local HTTP server (e.g. VS C
 ```
 www/          # Static app — no build, no npm
   config.js   # YAHOO_PROXY_URL export (single constant)
-  utils.js    # Pure: parseMoney(), fmt(), formatCurrency()
-  data.js     # Pure: fetchHolding(), countryToRegion(), regionFromTicker(), SECTOR_LABELS
+  utils.js    # Pure: parseMoney(), fmt(), formatCurrency(), clampThreshold()
+  data.js     # Pure: fetchHolding(), countryToRegion(), regionFromTicker(), SECTOR_LABELS, EQUITY_SECTOR_NORMALIZE, classifyQuoteType()
   analyse.js  # Pure: normaliseWeights(), analysePortfolio()
   app.js      # ONLY file that touches DOM, window, localStorage
   index.html  # Two-column layout; loads Chart.js + SheetJS via CDN
@@ -46,9 +46,10 @@ tests/        # Node built-in test runner (no npm install needed)
 
 1. User clicks "Analyse" → `app.js` reads holdings from DOM
 2. `Promise.all` dispatches one `fetchHolding(ticker)` call per holding (parallel)
-3. `data.js` detects `quoteType` from Yahoo response:
+3. `data.js` detects `quoteType` from Yahoo response via `classifyQuoteType()`:
    - **EQUITY**: returns `{ ticker, quoteType, sector, industry, country }`
    - **ETF / MUTUALFUND**: returns `{ ticker, quoteType: 'ETF', topHoldings[], sectorWeightings[], countryWeightings[], stockPosition, bondPosition, cashPosition }`
+   - **Unsupported** (INDEX, CURRENCY, CRYPTOCURRENCY, OPTION, etc.): returns `{ ticker, error: true, message }`
    - **Error**: returns `{ ticker, error: true, message }`
 4. `analysePortfolio()` aggregates all holdings into `assetClass`, `sector`, `region`, `etfConc` buckets and produces `flags[]`
 5. `app.js` renders charts (Chart.js vertical bars), flags, and holdings table
@@ -74,14 +75,16 @@ Region attribution uses a three-tier fallback:
 
 ### Weight Normalisation
 
-Users can mix `$` and `%` inputs per row. `normaliseWeights()` resolves this: `%` items claim their slice of 100%; `$` items share the remaining slice proportionally. If weights don't sum to 100% (tolerance: 0.5% to absorb floating-point drift), they are normalised and `normalised: true` is returned (shown as a note in the UI).
+Users can mix `$` and `%` inputs per row. `normaliseWeights()` resolves this: `%` items claim their slice of 100%; `$` items share the remaining slice proportionally. `normalised: true` is returned (shown as a note in the UI) in two cases:
+- The percent rows alone exceed 100% (detected before clamping, so over-allocation is always surfaced)
+- The final weights don't sum to 100% within a 0.5% tolerance (absorbs floating-point drift)
 
 ### Concentration Flags
 
 Four dimensions — `etf`, `sector`, `region`, `stock` — each produce flags:
 - **Red**: value ≥ threshold (rounded to 1 dp before comparison to absorb floating-point drift)
 - **Amber**: value ≥ threshold − 2%
-- **Green**: one summary flag per dimension when nothing breaches amber
+- **Green**: one summary flag per dimension when nothing breaches amber, and at least one holding exists in that dimension (e.g. no ETF green flag is emitted for a stock-only portfolio)
 
 Default thresholds (user-overridable, persisted to localStorage):
 
@@ -94,14 +97,35 @@ Default thresholds (user-overridable, persisted to localStorage):
 
 Stock flags include a `via` field (e.g. `"VAS.AX"`) when the concentration comes from an ETF sub-holding rather than a direct holding. The UI renders this as "(via VAS.AX)" in the flag title.
 
+The green stock flag's `count` reflects only real ticker entries — `"${etfTicker} (rest)"` pseudo-entries are excluded from the count.
+
 All four `buildDimFlags` / `buildStockFlags` calls in `analysePortfolio` include `?? default` fallbacks on the threshold so a missing key never silently produces all-green flags.
+
+### Sector Normalisation
+
+Yahoo's `assetProfile.sector` for direct equities uses different strings than the ETF `sectorWeightings` keys. `EQUITY_SECTOR_NORMALIZE` in `data.js` maps the divergent Yahoo equity strings to the canonical `SECTOR_LABELS` values so they merge into the same bucket:
+
+```js
+// The only known divergence — all other Yahoo equity sector strings already match canonical labels
+{ 'Financial Services': 'Financials' }
+```
+
+Applied at `analyse.js` when bucketing direct-stock sectors. If Yahoo adds new divergent strings, add them here.
+
+### Threshold Validation
+
+Thresholds are constrained to 1–100 in two places:
+- **`app.js` change handler**: the inline `parse` function rejects values outside `[1, 100]` and reverts to the previous valid value
+- **`app.js` `loadState()`**: calls `clampThreshold()` from `utils.js` on every persisted threshold to sanitise values stored before this validation existed
+
+`clampThreshold(n)` is a pure function in `utils.js`: `Math.min(100, Math.max(1, n))`.
 
 ### Holdings Input
 
 - Default input mode is `%` (not `$`)
 - Each row has an ASX checkbox (checked by default); on blur, `.AX` is appended when checked and the ticker has no suffix
 - A live "X% remaining" counter updates below the list as values are typed; turns green at 100%, red if over
-- Threshold inputs use `type="number" min="1" max="100"`; invalid input snaps back to the previous valid value rather than silently resetting to a hardcoded default
+- Threshold inputs use `type="number" min="1" max="100"`; values outside 1–100 are rejected and snap back to the previous valid value. Persisted values are also clamped via `clampThreshold()` on load.
 
 ### Excel Import / Export
 
@@ -160,4 +184,6 @@ Key: `portfoliohealth_v1`. Persists `holdings[]` and `thresholds`. Forward-compa
 
 ## Implementation Status
 
-All tasks complete and live. The tool is deployed at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).
+All tasks complete and live. Seven concentration-risk fixes deployed (sector bucket split, over-100% normalisation warning, threshold validation, unsupported instrument rejection, phantom ETF green flag, stock count excluding `(rest)` entries, integration tests for threshold clamping). Tests: 74 pass, 0 fail.
+
+The tool is live at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).

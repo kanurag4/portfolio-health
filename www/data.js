@@ -14,6 +14,12 @@ export const SECTOR_LABELS = {
   utilities:              'Utilities',
 };
 
+// Maps Yahoo assetProfile.sector strings to the canonical SECTOR_LABELS values.
+// Most Yahoo equity sectors already match the canonical label; only Financial Services differs.
+export const EQUITY_SECTOR_NORMALIZE = {
+  'Financial Services': 'Financials',
+};
+
 const REGION_MAP = {
   'Australia': 'Australia', 'New Zealand': 'Australia',
   'United States': 'United States',
@@ -74,6 +80,12 @@ export function regionFromTicker(ticker) {
   return SUFFIX_REGION[suffix] ?? 'Unclassified';
 }
 
+export function classifyQuoteType(quoteType) {
+  if (quoteType === 'ETF' || quoteType === 'MUTUALFUND') return 'ETF';
+  if (quoteType === 'EQUITY') return 'EQUITY';
+  return null;
+}
+
 export async function fetchHolding(ticker) {
   const symbol = ticker.trim().toUpperCase();
   const url = `${YAHOO_PROXY_URL.replace(/\/$/, '')}/quoteSummary/${encodeURIComponent(symbol)}`;
@@ -89,10 +101,18 @@ export async function fetchHolding(ticker) {
     const result = body?.quoteSummary?.result?.[0];
     if (!result) throw new Error(`No data for "${symbol}".`);
 
-    const quoteType = result.quoteType?.quoteType;
+    const rawQuoteType = result.quoteType?.quoteType;
     const name = result.quoteType?.longName ?? result.quoteType?.shortName ?? symbol;
+    const classified = classifyQuoteType(rawQuoteType);
 
-    if (quoteType === 'ETF' || quoteType === 'MUTUALFUND') {
+    if (classified === null) {
+      return {
+        ticker: symbol, error: true,
+        message: `"${symbol}" is a ${rawQuoteType?.toLowerCase() ?? 'unsupported'} instrument — only equities and ETFs are supported.`,
+      };
+    }
+
+    if (classified === 'ETF') {
       const th = result.topHoldings ?? {};
       const rawHoldings = th.holdings ?? [];
       const rawSectors  = th.sectorWeightings ?? [];

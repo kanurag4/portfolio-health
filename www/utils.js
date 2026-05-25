@@ -14,3 +14,7 @@ export function formatCurrency(value) {
   if (value == null || !isFinite(value)) return '—';
   return '$' + Number(value).toLocaleString('en-AU', { maximumFractionDigits: 0 });
 }
+
+export function clampThreshold(n) {
+  return Math.min(100, Math.max(1, n));
+}
