@@ -1,5 +1,49 @@
 import { countryToRegion, regionFromTicker, SECTOR_LABELS, EQUITY_SECTOR_NORMALIZE } from './data.js';
 
+export function scorePortfolio(flags) {
+  const DIMENSIONS = ['stock', 'sector', 'region', 'etf'];
+  const scores = {};
+  for (const dim of DIMENSIONS) {
+    const dimFlags = flags.filter(f => f.dimension === dim);
+    if (dimFlags.length === 0) { scores[dim] = 25; continue; }
+    const redCount   = dimFlags.filter(f => f.status === 'red').length;
+    const amberCount = dimFlags.filter(f => f.status === 'amber').length;
+    scores[dim] = Math.max(0, 25 - (redCount * 10) - (amberCount * 5));
+  }
+  return {
+    total:  scores.stock + scores.sector + scores.region + scores.etf,
+    stock:  scores.stock,
+    sector: scores.sector,
+    region: scores.region,
+    etf:    scores.etf,
+  };
+}
+
+export function detectOverlap(resolvedHoldings, normalisedWeights) {
+  const { weights } = normalisedWeights;
+  const etfs = resolvedHoldings.filter(
+    h => !h.error && h.quoteType === 'ETF' && h.topHoldings && h.topHoldings.length > 0
+  );
+  const result = [];
+  for (let i = 0; i < etfs.length; i++) {
+    for (let j = i + 1; j < etfs.length; j++) {
+      const a = etfs[i], b = etfs[j];
+      const tickersInA = new Map(a.topHoldings.map(h => [h.ticker, h.weight]));
+      const shared = b.topHoldings
+        .filter(h => tickersInA.has(h.ticker))
+        .map(h => ({
+          ticker:    h.ticker,
+          weightInA: tickersInA.get(h.ticker) * 100,
+          weightInB: h.weight * 100,
+        }))
+        .sort((x, y) => Math.max(y.weightInA, y.weightInB) - Math.max(x.weightInA, x.weightInB));
+      if (shared.length === 0) continue;
+      result.push({ etfA: a.ticker, etfB: b.ticker, weightA: weights[a.ticker] ?? 0, weightB: weights[b.ticker] ?? 0, shared });
+    }
+  }
+  return result;
+}
+
 export function normaliseWeights(rawWeights) {
   const percentItems = rawWeights.filter(w => w.inputMode === '%');
   const dollarItems  = rawWeights.filter(w => w.inputMode === '$');
@@ -31,13 +75,15 @@ export function normaliseWeights(rawWeights) {
 export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   const { weights, normalised } = normaliseWeights(rawWeights);
 
-  const assetClass    = {};
-  const sector        = {};
-  const region        = {};
-  const etfConc       = {};
-  const stockConc     = {};
-  const stockConcVia  = {}; // ticker -> Set of ETF tickers it came through
-  const unresolved    = [];
+  const assetClass          = {};
+  const sector              = {};
+  const region              = {};
+  const etfConc             = {};
+  const stockConc           = {};
+  const stockConcVia        = {}; // ticker -> Set of ETF tickers it came through
+  const unresolved          = [];
+  const sectorContributions = {};
+  const regionContributions = {};
 
   for (const h of resolvedHoldings) {
     if (h.error) { unresolved.push(h.ticker); continue; }
@@ -57,27 +103,38 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
         for (const sw of h.sectorWeightings) {
           const [key, val] = Object.entries(sw)[0];
           const pct = typeof val === 'object' ? (val.raw ?? 0) : val;
-          add(sector, SECTOR_LABELS[key] ?? key, w * pct);
+          const sectorName = SECTOR_LABELS[key] ?? key;
+          add(sector, sectorName, w * pct);
+          addContrib(sectorContributions, sectorName, h.ticker, w * pct, 'etf');
         }
       } else {
         add(sector, 'Diversified (ETF)', w);
+        addContrib(sectorContributions, 'Diversified (ETF)', h.ticker, w, 'etf');
       }
 
       if (h.countryWeightings && h.countryWeightings.length > 0) {
         for (const cw of h.countryWeightings) {
           const [country, val] = Object.entries(cw)[0];
           const pct = typeof val === 'object' ? (val.raw ?? 0) : val;
-          add(region, countryToRegion(country), w * pct);
+          const regionName = countryToRegion(country);
+          add(region, regionName, w * pct);
+          addContrib(regionContributions, regionName, h.ticker, w * pct, 'etf');
         }
       } else if (h.topHoldings && h.topHoldings.length > 0) {
         let covered = 0;
         for (const top of h.topHoldings) {
-          add(region, regionFromTicker(top.ticker), w * top.weight);
+          const regionName = regionFromTicker(top.ticker);
+          add(region, regionName, w * top.weight);
+          addContrib(regionContributions, regionName, h.ticker, w * top.weight, 'etf');
           covered += top.weight;
         }
-        if (covered < 1) add(region, 'Unclassified', w * (1 - covered));
+        if (covered < 1) {
+          add(region, 'Unclassified', w * (1 - covered));
+          addContrib(regionContributions, 'Unclassified', h.ticker, w * (1 - covered), 'etf');
+        }
       } else {
         add(region, 'Unclassified', w);
+        addContrib(regionContributions, 'Unclassified', h.ticker, w, 'etf');
       }
 
       let covered = 0;
@@ -90,8 +147,12 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       if (covered < 1) add(stockConc, `${h.ticker} (rest)`, w * (1 - covered));
     } else {
       add(assetClass, 'Equity', w);
-      add(sector, EQUITY_SECTOR_NORMALIZE[h.sector] ?? h.sector ?? 'Unclassified', w);
-      add(region, countryToRegion(h.country), w);
+      const sectorName = EQUITY_SECTOR_NORMALIZE[h.sector] ?? h.sector ?? 'Unclassified';
+      add(sector, sectorName, w);
+      addContrib(sectorContributions, sectorName, h.ticker, w, 'direct');
+      const regionName = countryToRegion(h.country);
+      add(region, regionName, w);
+      addContrib(regionContributions, regionName, h.ticker, w, 'direct');
       add(stockConc, h.ticker, w);
     }
   }
@@ -103,12 +164,18 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
     ...buildStockFlags(stockConc, stockConcVia, thresholds.stock ?? 10),
   ];
 
-  return { assetClass, sector, region, flags, unresolved, normalised };
+  return { assetClass, sector, region, flags, unresolved, normalised, sectorContributions, regionContributions };
 }
 
 function add(obj, key, value) {
   if (!key || value <= 0) return;
   obj[key] = (obj[key] ?? 0) + value;
+}
+
+function addContrib(obj, bucketName, ticker, contribution, type) {
+  if (!bucketName || contribution <= 0) return;
+  if (!obj[bucketName]) obj[bucketName] = [];
+  obj[bucketName].push({ ticker, contribution, type });
 }
 
 function flagStatus(value, threshold) {

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { normaliseWeights, analysePortfolio } from '../www/analyse.js';
+import { normaliseWeights, analysePortfolio, scorePortfolio, detectOverlap } from '../www/analyse.js';
 import { clampThreshold } from '../www/utils.js';
 
 const DEFAULT_THRESHOLDS = { stock: 10, sector: 30, region: 50 };
@@ -450,5 +450,375 @@ describe('analysePortfolio — threshold clamping integration', () => {
     const vasFlag = flags.find(f => f.dimension === 'etf' && f.name === 'VAS.AX');
     assert.ok(vasFlag, 'VAS.AX ETF flag should exist');
     assert.equal(vasFlag.status, 'red', 'After clamping to 100, 100% ETF must be red');
+  });
+});
+
+// ── scorePortfolio ────────────────────────────────────────────────────────────
+describe('scorePortfolio', () => {
+  it('returns 100 when all four dimensions have only green flags', () => {
+    const flags = [
+      { dimension: 'stock',  status: 'green', name: 'all', value: null, threshold: 10, count: 5 },
+      { dimension: 'sector', status: 'green', name: 'all', value: null, threshold: 30, count: 4 },
+      { dimension: 'region', status: 'green', name: 'all', value: null, threshold: 50, count: 3 },
+      { dimension: 'etf',    status: 'green', name: 'all', value: null, threshold: 30, count: 2 },
+    ];
+    const score = scorePortfolio(flags);
+    assert.equal(score.total,  100);
+    assert.equal(score.stock,   25);
+    assert.equal(score.sector,  25);
+    assert.equal(score.region,  25);
+    assert.equal(score.etf,     25);
+  });
+
+  it('returns 100 when flags array is empty (no holdings)', () => {
+    const score = scorePortfolio([]);
+    assert.equal(score.total, 100);
+    assert.equal(score.stock,  25);
+    assert.equal(score.sector, 25);
+    assert.equal(score.region, 25);
+    assert.equal(score.etf,    25);
+  });
+
+  it('deducts 10 per red flag from the relevant dimension', () => {
+    const flags = [
+      { dimension: 'sector', status: 'red',   name: 'Financials', value: 45, threshold: 30 },
+      { dimension: 'stock',  status: 'green',  name: 'all',        value: null, threshold: 10, count: 3 },
+      { dimension: 'region', status: 'green',  name: 'all',        value: null, threshold: 50, count: 2 },
+    ];
+    const score = scorePortfolio(flags);
+    assert.equal(score.sector, 15);
+    assert.equal(score.stock,  25);
+    assert.equal(score.region, 25);
+    assert.equal(score.etf,    25);
+    assert.equal(score.total,  90);
+  });
+
+  it('deducts 5 per amber flag from the relevant dimension', () => {
+    const flags = [
+      { dimension: 'region', status: 'amber', name: 'Australia', value: 49, threshold: 50 },
+      { dimension: 'stock',  status: 'green', name: 'all', value: null, threshold: 10, count: 4 },
+      { dimension: 'sector', status: 'green', name: 'all', value: null, threshold: 30, count: 3 },
+    ];
+    const score = scorePortfolio(flags);
+    assert.equal(score.region, 20);
+    assert.equal(score.total,  95);
+  });
+
+  it('clamps a dimension score to 0 when deductions exceed 25', () => {
+    const flags = [
+      { dimension: 'sector', status: 'red', name: 'Financials', value: 45, threshold: 30 },
+      { dimension: 'sector', status: 'red', name: 'Technology',  value: 35, threshold: 30 },
+      { dimension: 'sector', status: 'red', name: 'Energy',      value: 31, threshold: 30 },
+      { dimension: 'stock',  status: 'green', name: 'all', value: null, threshold: 10, count: 3 },
+      { dimension: 'region', status: 'green', name: 'all', value: null, threshold: 50, count: 2 },
+    ];
+    const score = scorePortfolio(flags);
+    assert.equal(score.sector, 0);
+    assert.equal(score.total,  75);
+  });
+
+  it('handles mixed red and amber on same dimension', () => {
+    const flags = [
+      { dimension: 'etf', status: 'red',   name: 'VAS.AX', value: 55, threshold: 30 },
+      { dimension: 'etf', status: 'amber', name: 'VGS.AX', value: 29, threshold: 30 },
+      { dimension: 'stock',  status: 'green', name: 'all', value: null, threshold: 10, count: 2 },
+      { dimension: 'sector', status: 'green', name: 'all', value: null, threshold: 30, count: 3 },
+      { dimension: 'region', status: 'green', name: 'all', value: null, threshold: 50, count: 2 },
+    ];
+    const score = scorePortfolio(flags);
+    assert.equal(score.etf,   10);
+    assert.equal(score.total, 85);
+  });
+
+  it('stock-only portfolio has etf=25 (neutral) and scores stock dimension correctly', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+      { ticker: 'BHP.AX', quoteType: 'EQUITY', sector: 'Basic Materials', country: 'Australia', error: false },
+      { ticker: 'WES.AX', quoteType: 'EQUITY', sector: 'Consumer Cyclical', country: 'Australia', error: false },
+    ];
+    const rawWeights = holdings.map(h => ({ ticker: h.ticker, inputMode: '$', value: 1000 }));
+    const { flags } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const score = scorePortfolio(flags);
+    assert.ok(score.total >= 0 && score.total <= 100, `total out of range: ${score.total}`);
+    assert.equal(score.etf, 25, 'no ETFs → etf dimension is neutral 25');
+  });
+});
+
+// ── sectorContributions ───────────────────────────────────────────────────────
+describe('analysePortfolio — sectorContributions', () => {
+  it('tracks direct equity contribution to a sector bucket', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [{ ticker: 'CBA.AX', inputMode: '%', value: 100 }];
+    const { sectorContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(sectorContributions['Financials'], 'Financials bucket should exist');
+    assert.equal(sectorContributions['Financials'].length, 1);
+    assert.equal(sectorContributions['Financials'][0].ticker, 'CBA.AX');
+    assert.ok(Math.abs(sectorContributions['Financials'][0].contribution - 100) < 0.01);
+    assert.equal(sectorContributions['Financials'][0].type, 'direct');
+  });
+
+  it('tracks ETF contribution to sector buckets', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [],
+      sectorWeightings: [{ financial_services: 0.32 }, { basic_materials: 0.20 }],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const { sectorContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(sectorContributions['Financials'], 'Financials should be present');
+    assert.equal(sectorContributions['Financials'][0].ticker, 'VAS.AX');
+    assert.ok(Math.abs(sectorContributions['Financials'][0].contribution - 32) < 0.1);
+    assert.equal(sectorContributions['Financials'][0].type, 'etf');
+    assert.ok(sectorContributions['Basic Materials']);
+    assert.ok(Math.abs(sectorContributions['Basic Materials'][0].contribution - 20) < 0.1);
+  });
+
+  it('combines ETF and direct contributions in same sector bucket', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financial Services', country: 'Australia', error: false },
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        stockPosition: 1, bondPosition: 0, cashPosition: 0,
+        topHoldings: [],
+        sectorWeightings: [{ financial_services: 0.25 }],
+        countryWeightings: [],
+      },
+    ];
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '%', value: 20 },
+      { ticker: 'VAS.AX', inputMode: '%', value: 80 },
+    ];
+    const { sectorContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    const finEntries = sectorContributions['Financials'];
+    assert.ok(finEntries, 'Financials bucket must exist');
+    assert.equal(finEntries.length, 2, 'two contributors: CBA.AX direct + VAS.AX etf');
+    const cbaEntry = finEntries.find(e => e.ticker === 'CBA.AX');
+    const vasEntry = finEntries.find(e => e.ticker === 'VAS.AX');
+    assert.ok(cbaEntry, 'CBA.AX should be in Financials contributions');
+    assert.equal(cbaEntry.type, 'direct');
+    assert.ok(vasEntry, 'VAS.AX should be in Financials contributions');
+    assert.equal(vasEntry.type, 'etf');
+    assert.ok(Math.abs(cbaEntry.contribution - 20) < 0.1, `CBA contribution ${cbaEntry.contribution}`);
+    assert.ok(Math.abs(vasEntry.contribution - 20) < 0.1, `VAS contribution ${vasEntry.contribution}`);
+  });
+
+  it('assigns Diversified (ETF) bucket for ETF with no sectorWeightings', () => {
+    const holdings = [{
+      ticker: 'VDHG.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [],
+      sectorWeightings: [],
+      countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VDHG.AX', inputMode: '%', value: 100 }];
+    const { sectorContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(sectorContributions['Diversified (ETF)']);
+    assert.equal(sectorContributions['Diversified (ETF)'][0].ticker, 'VDHG.AX');
+    assert.equal(sectorContributions['Diversified (ETF)'][0].type, 'etf');
+  });
+
+  it('contribution sums match bucket totals', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+      { ticker: 'BHP.AX', quoteType: 'EQUITY', sector: 'Basic Materials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '$', value: 5000 },
+      { ticker: 'BHP.AX', inputMode: '$', value: 5000 },
+    ];
+    const result = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(Math.abs(result.sector['Financials']    - 50) < 0.1);
+    assert.ok(Math.abs(result.sector['Basic Materials'] - 50) < 0.1);
+    const sectorFinSum = result.sectorContributions['Financials']
+      .reduce((s, e) => s + e.contribution, 0);
+    assert.ok(Math.abs(sectorFinSum - 50) < 0.1, `Financials contribution sum ${sectorFinSum}`);
+  });
+});
+
+// ── regionContributions ───────────────────────────────────────────────────────
+describe('analysePortfolio — regionContributions', () => {
+  it('tracks direct equity contribution to a region bucket', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [{ ticker: 'CBA.AX', inputMode: '%', value: 100 }];
+    const { regionContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(regionContributions['Australia']);
+    assert.equal(regionContributions['Australia'][0].ticker, 'CBA.AX');
+    assert.ok(Math.abs(regionContributions['Australia'][0].contribution - 100) < 0.01);
+    assert.equal(regionContributions['Australia'][0].type, 'direct');
+  });
+
+  it('tracks ETF countryWeightings contribution to region buckets', () => {
+    const holdings = [{
+      ticker: 'VGS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [],
+      sectorWeightings: [],
+      countryWeightings: [
+        { 'United States': { raw: 0.65, fmt: '65.00%' } },
+        { 'Japan': { raw: 0.07, fmt: '7.00%' } },
+      ],
+    }];
+    const rawWeights = [{ ticker: 'VGS.AX', inputMode: '%', value: 100 }];
+    const { regionContributions } = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(regionContributions['United States']);
+    assert.equal(regionContributions['United States'][0].ticker, 'VGS.AX');
+    assert.ok(Math.abs(regionContributions['United States'][0].contribution - 65) < 0.1);
+    assert.equal(regionContributions['United States'][0].type, 'etf');
+    assert.ok(regionContributions['International Developed']);
+    assert.ok(Math.abs(regionContributions['International Developed'][0].contribution - 7) < 0.1);
+  });
+
+  it('region contribution sums match bucket totals', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+      { ticker: 'BHP.AX', quoteType: 'EQUITY', sector: 'Basic Materials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '$', value: 5000 },
+      { ticker: 'BHP.AX', inputMode: '$', value: 5000 },
+    ];
+    const result = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+    assert.ok(Math.abs(result.region['Australia'] - 100) < 0.1);
+    const regionAuSum = result.regionContributions['Australia']
+      .reduce((s, e) => s + e.contribution, 0);
+    assert.ok(Math.abs(regionAuSum - 100) < 0.1, `Australia contribution sum ${regionAuSum}`);
+  });
+});
+
+// ── detectOverlap ─────────────────────────────────────────────────────────────
+describe('detectOverlap', () => {
+  it('returns empty array when there are no ETFs', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+    ];
+    const rawWeights = [{ ticker: 'CBA.AX', inputMode: '%', value: 100 }];
+    assert.deepEqual(detectOverlap(holdings, normaliseWeights(rawWeights)), []);
+  });
+
+  it('returns empty array when only one ETF', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      topHoldings: [{ ticker: 'CBA.AX', name: 'CBA', weight: 0.08 }],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    assert.deepEqual(detectOverlap(holdings, normaliseWeights(rawWeights)), []);
+  });
+
+  it('returns empty array when two ETFs share no top-10 holdings', () => {
+    const holdings = [
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        topHoldings: [{ ticker: 'CBA.AX', name: 'CBA', weight: 0.08 }],
+      },
+      {
+        ticker: 'VGS.AX', quoteType: 'ETF', error: false,
+        topHoldings: [{ ticker: 'AAPL', name: 'Apple', weight: 0.06 }],
+      },
+    ];
+    const rawWeights = [
+      { ticker: 'VAS.AX', inputMode: '%', value: 50 },
+      { ticker: 'VGS.AX', inputMode: '%', value: 50 },
+    ];
+    assert.deepEqual(detectOverlap(holdings, normaliseWeights(rawWeights)), []);
+  });
+
+  it('detects overlap between two ETFs sharing one ticker', () => {
+    const holdings = [
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        topHoldings: [
+          { ticker: 'CBA.AX', name: 'CBA', weight: 0.08 },
+          { ticker: 'BHP.AX', name: 'BHP', weight: 0.05 },
+        ],
+      },
+      {
+        ticker: 'VDHG.AX', quoteType: 'ETF', error: false,
+        topHoldings: [
+          { ticker: 'CBA.AX', name: 'CBA', weight: 0.04 },
+          { ticker: 'AAPL',   name: 'Apple', weight: 0.06 },
+        ],
+      },
+    ];
+    const rawWeights = [
+      { ticker: 'VAS.AX',  inputMode: '%', value: 60 },
+      { ticker: 'VDHG.AX', inputMode: '%', value: 40 },
+    ];
+    const result = detectOverlap(holdings, normaliseWeights(rawWeights));
+    assert.equal(result.length, 1, 'one overlapping pair');
+    const pair = result[0];
+    const tickers = [pair.etfA, pair.etfB].sort();
+    assert.deepEqual(tickers, ['VAS.AX', 'VDHG.AX']);
+    assert.equal(pair.shared.length, 1);
+    assert.equal(pair.shared[0].ticker, 'CBA.AX');
+    if (pair.etfA === 'VAS.AX') {
+      assert.ok(Math.abs(pair.shared[0].weightInA - 8) < 0.01);
+      assert.ok(Math.abs(pair.shared[0].weightInB - 4) < 0.01);
+    } else {
+      assert.ok(Math.abs(pair.shared[0].weightInA - 4) < 0.01);
+      assert.ok(Math.abs(pair.shared[0].weightInB - 8) < 0.01);
+    }
+    assert.ok(Math.abs(pair.weightA + pair.weightB - 100) < 0.1);
+  });
+
+  it('sorts shared holdings by max(weightInA, weightInB) descending', () => {
+    const holdings = [
+      {
+        ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+        topHoldings: [
+          { ticker: 'CBA.AX', name: 'CBA', weight: 0.08 },
+          { ticker: 'BHP.AX', name: 'BHP', weight: 0.03 },
+        ],
+      },
+      {
+        ticker: 'VDHG.AX', quoteType: 'ETF', error: false,
+        topHoldings: [
+          { ticker: 'CBA.AX', name: 'CBA', weight: 0.04 },
+          { ticker: 'BHP.AX', name: 'BHP', weight: 0.09 },
+        ],
+      },
+    ];
+    const rawWeights = [
+      { ticker: 'VAS.AX',  inputMode: '%', value: 50 },
+      { ticker: 'VDHG.AX', inputMode: '%', value: 50 },
+    ];
+    const result = detectOverlap(holdings, normaliseWeights(rawWeights));
+    assert.equal(result.length, 1);
+    const { shared } = result[0];
+    assert.equal(shared.length, 2);
+    // BHP: max(3,9)=9; CBA: max(8,4)=8 → BHP first
+    assert.equal(shared[0].ticker, 'BHP.AX', `Expected BHP.AX first, got ${shared[0].ticker}`);
+    assert.equal(shared[1].ticker, 'CBA.AX');
+  });
+
+  it('skips ETFs with empty topHoldings', () => {
+    const holdings = [
+      { ticker: 'VAS.AX', quoteType: 'ETF', error: false, topHoldings: [] },
+      { ticker: 'VGS.AX', quoteType: 'ETF', error: false, topHoldings: [{ ticker: 'AAPL', name: 'Apple', weight: 0.06 }] },
+    ];
+    const rawWeights = [
+      { ticker: 'VAS.AX', inputMode: '%', value: 50 },
+      { ticker: 'VGS.AX', inputMode: '%', value: 50 },
+    ];
+    assert.deepEqual(detectOverlap(holdings, normaliseWeights(rawWeights)), []);
+  });
+
+  it('ignores non-ETF and error holdings', () => {
+    const holdings = [
+      { ticker: 'VAS.AX', quoteType: 'ETF', error: false, topHoldings: [{ ticker: 'CBA.AX', name: 'CBA', weight: 0.08 }] },
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+      { ticker: 'XYZ', error: true },
+    ];
+    const rawWeights = [
+      { ticker: 'VAS.AX', inputMode: '%', value: 50 },
+      { ticker: 'CBA.AX', inputMode: '%', value: 40 },
+      { ticker: 'XYZ',    inputMode: '%', value: 10 },
+    ];
+    assert.deepEqual(detectOverlap(holdings, normaliseWeights(rawWeights)), []);
   });
 });
