@@ -145,6 +145,7 @@
       <h2>About this tool</h2>
       <p>Portfolio Health Check analyses your investment holdings for concentration risk across sectors, regions, and individual stocks. Enter your holdings manually or import from Excel, and the tool flags anything above your chosen thresholds with red/amber/green indicators.</p>
       <p>Built for Australian investors holding a mix of ETFs, shares, and other assets who want a quick sanity-check on diversification before or after rebalancing.</p>
+      <p>After analysis you get a <strong>Portfolio Health Score</strong> (0–100) summarising diversification quality at a glance, interactive charts you can click to see exactly which holdings drive each exposure, and an <strong>ETF Overlap</strong> card that surfaces hidden duplication between funds.</p>
     </div>
     <div class="tool-faq">
       <h2>Frequently asked questions</h2>
@@ -153,8 +154,22 @@
         <p>Concentration risk is the danger of having too much of your portfolio in a single stock, sector, or region. If that holding falls sharply, a concentrated portfolio suffers far more than a diversified one. Most portfolio construction guidelines suggest no single stock should exceed 5–10% and no single sector more than 20–30% of your total holdings.</p>
       </details>
       <details class="faq-item">
+        <summary>How is the Portfolio Health Score calculated?</summary>
+        <p>The score runs from 0 to 100 and is split across four dimensions — Holdings, Sector, Regions, and ETFs — each worth up to 25 points. Within each dimension, every red flag (at or above your threshold) deducts 10 points and every amber flag (within 2% of the threshold) deducts 5 points, floored at zero. A dimension with no holdings of that type (for example, no ETFs in a stock-only portfolio) scores a neutral 25 rather than being penalised.</p>
+        <p>As a rough guide: 75–100 is well-diversified, 50–74 warrants a closer look, and below 50 indicates meaningful concentration that is worth addressing.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What do the red, amber, and green flags mean?</summary>
+        <p><strong>Red</strong> means a holding, sector, or region has reached or exceeded your concentration threshold. <strong>Amber</strong> means it is within 2 percentage points of the threshold — worth watching, especially if you plan to add to that position. <strong>Green</strong> means the entire dimension is well diversified with nothing approaching the threshold. You can adjust all thresholds under "Concentration Thresholds" before running the analysis.</p>
+      </details>
+      <details class="faq-item">
         <summary>How does ETF look-through work?</summary>
         <p>Rather than treating an ETF as a single holding, the tool fetches the ETF's underlying sector and region weightings from Yahoo Finance, then distributes its weight across those categories. This gives a more accurate picture of your real exposure — for example, an ASX 200 ETF brings significant financial sector concentration even though it looks like one line item.</p>
+        <p>Click any bar in the Sector or Region charts after analysing to see exactly which holdings drive that exposure and how much each contributes.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What is ETF overlap and why does it matter?</summary>
+        <p>When two ETFs both hold the same underlying stocks, adding more of either fund does not improve diversification as much as you might expect. The ETF Overlap card compares the top-10 holdings of every ETF pair in your portfolio and shows the tickers they share. The weights displayed are each holding's share <em>within</em> that ETF, not your whole portfolio. Only ETFs with available top-10 data from Yahoo Finance are compared.</p>
       </details>
       <details class="faq-item">
         <summary>Can I import my portfolio from my broker?</summary>
