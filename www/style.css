@@ -109,6 +109,8 @@ body {
 .kv-excel-row { display: flex; gap: 8px; }
 .kv-file-label { display: inline-flex; align-items: center; cursor: pointer; }
 .kv-divider-label { text-align: center; color: var(--kv-muted); font-size: 0.8rem; }
+.kv-ticker-hint { font-size: 0.75rem; color: var(--kv-muted); text-align: center; margin-top: 6px; }
+.kv-ticker-hint code { background: var(--kv-card-2); padding: 1px 4px; border-radius: 3px; font-size: 0.72rem; }
 .kv-action-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 
 /* Holdings rows */
@@ -248,7 +250,7 @@ body {
 @media print {
   .kv-input-panel, .kv-header .kv-logo-link,
   .kv-export-row, #btn-add-row, .kv-action-row,
-  .kv-excel-row, .kv-divider-label { display: none !important; }
+  .kv-excel-row, .kv-divider-label, .kv-ticker-hint { display: none !important; }
   body { background: white; color: #111; }
   .kv-main { grid-template-columns: 1fr; }
   .kv-footer { border-top: 1px solid #ccc; font-size: 0.8rem; font-weight: 600; }
