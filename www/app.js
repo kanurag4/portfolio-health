@@ -1,6 +1,6 @@
 import { parseMoney, clampThreshold } from './utils.js';
 import { fetchHolding, countryToRegion } from './data.js';
-import { analysePortfolio, normaliseWeights } from './analyse.js';
+import { analysePortfolio, normaliseWeights, scorePortfolio, detectOverlap } from './analyse.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -423,6 +423,8 @@ async function renderResults(resolvedHoldings, analysis, rawWeights) {
 
   renderHoldingsTable(resolvedHoldings, rawWeights);
   renderFlags(analysis.flags);
+  renderScoreCard(scorePortfolio(analysis.flags));
+  renderOverlapCard(detectOverlap(resolvedHoldings, normaliseWeights(rawWeights)), etfCount);
   renderCharts(analysis, resolvedHoldings, rawWeights);
 }
 
@@ -511,14 +513,155 @@ function buildFlagEl(f) {
   return el;
 }
 
+// ── Score card ────────────────────────────────────────────────────────────────
+function renderScoreCard(score) {
+  const el = document.getElementById('score-card');
+  const totalCls = score.total >= 75 ? 'kv-score-green' : score.total >= 50 ? 'kv-score-amber' : 'kv-score-red';
+
+  function dimBar(label, val) {
+    const pct = (val / 25) * 100;
+    const barCls = pct >= 75 ? 'kv-score-bar-green' : pct >= 50 ? 'kv-score-bar-amber' : 'kv-score-bar-red';
+    const valCls = pct >= 75 ? 'kv-score-green' : pct >= 50 ? 'kv-score-amber' : 'kv-score-red';
+    return `
+      <div class="kv-score-dim">
+        <div class="kv-score-dim-label">${label}<span class="${valCls}">${val}</span></div>
+        <div class="kv-score-bar-track"><div class="kv-score-bar-fill ${barCls}" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="kv-score-card">
+      <div class="kv-score-main">
+        <span class="kv-score-number ${totalCls}">${score.total}</span>
+        <span class="kv-score-denom">/100</span>
+        <span class="kv-score-label">Health Score</span>
+      </div>
+      <div class="kv-score-dims">
+        ${dimBar('Holdings', score.stock)}
+        ${dimBar('Sector', score.sector)}
+        ${dimBar('Regions', score.region)}
+        ${dimBar('ETFs', score.etf)}
+      </div>
+    </div>`;
+  el.hidden = false;
+}
+
+// ── Overlap card ──────────────────────────────────────────────────────────────
+function renderOverlapCard(overlaps, etfCount) {
+  const el = document.getElementById('overlap-card');
+  if (etfCount < 2) { el.hidden = true; return; }
+
+  if (overlaps.length === 0) {
+    el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3><p class="kv-overlap-none">🟢 No shared top-10 holdings between your ETFs.</p></div>`;
+    el.hidden = false;
+    return;
+  }
+
+  const pairsHtml = [...overlaps]
+    .sort((a, b) => b.shared.length - a.shared.length)
+    .map(pair => `
+      <div class="kv-overlap-pair">
+        <div class="kv-overlap-pair-header">
+          <span>${escapeHtml(pair.etfA)} ↔ ${escapeHtml(pair.etfB)}</span>
+          <span class="kv-overlap-pair-badge">${pair.shared.length} shared holdings</span>
+        </div>
+        <div class="kv-overlap-header-row">
+          <span>Ticker</span><span>${escapeHtml(pair.etfA)}</span><span>${escapeHtml(pair.etfB)}</span>
+        </div>
+        ${pair.shared.map(s => `
+          <div class="kv-overlap-row">
+            <span class="kv-overlap-ticker">${escapeHtml(s.ticker)}</span>
+            <span class="kv-overlap-wt">${s.weightInA.toFixed(1)}%</span>
+            <span class="kv-overlap-wt">${s.weightInB.toFixed(1)}%</span>
+          </div>`).join('')}
+      </div>`).join('');
+
+  el.innerHTML = `<div class="kv-overlap-card"><h3>ETF Overlap</h3>${pairsHtml}</div>`;
+  el.hidden = false;
+}
+
+// ── Drill panel ───────────────────────────────────────────────────────────────
+function openDrillPanel(label, dimension) {
+  if (!lastAnalysis) return;
+  const { analysis, resolvedHoldings } = lastAnalysis;
+  const { weights } = normaliseWeights(lastAnalysis.rawWeights);
+  const content = document.getElementById('drill-content');
+  let html = '';
+
+  if (dimension === 'sector') {
+    const contribs = analysis.sectorContributions[label] ?? [];
+    const total = contribs.reduce((s, c) => s + c.contribution, 0);
+    html = `
+      <h2>${escapeHtml(label)}</h2>
+      <p class="drill-subheader">${total.toFixed(1)}% of portfolio</p>
+      ${contribs
+        .sort((a, b) => b.contribution - a.contribution)
+        .map(c => `
+          <div class="drill-contrib-row">
+            <span>${escapeHtml(c.ticker)}</span>
+            <span class="drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
+            <span>${c.contribution.toFixed(1)}%</span>
+          </div>`).join('')}`;
+  } else if (dimension === 'region') {
+    const contribs = analysis.regionContributions[label] ?? [];
+    const total = contribs.reduce((s, c) => s + c.contribution, 0);
+    html = `
+      <h2>${escapeHtml(label)}</h2>
+      <p class="drill-subheader">${total.toFixed(1)}% of portfolio</p>
+      ${contribs
+        .sort((a, b) => b.contribution - a.contribution)
+        .map(c => `
+          <div class="drill-contrib-row">
+            <span>${escapeHtml(c.ticker)}</span>
+            <span class="drill-type-${c.type}">${c.type === 'direct' ? 'Direct' : 'via ETF'}</span>
+            <span>${c.contribution.toFixed(1)}%</span>
+          </div>`).join('')}`;
+  } else if (dimension === 'holdings') {
+    const h = resolvedHoldings.find(r => r.ticker === label);
+    if (!h || h.error) {
+      html = `<h2>${escapeHtml(label)}</h2><p>No data available.</p>`;
+    } else {
+      const w = weights[h.ticker] ?? 0;
+      if (h.quoteType === 'ETF') {
+        const topHtml = (h.topHoldings ?? []).slice(0, 10)
+          .map(t => `<div class="drill-holding-row"><span>${escapeHtml(t.ticker)}</span><span>${(t.weight * 100).toFixed(1)}%</span></div>`)
+          .join('');
+        html = `
+          <h2>${escapeHtml(h.ticker)}</h2>
+          ${h.name ? `<p class="drill-subheader">${escapeHtml(h.name)}</p>` : ''}
+          <div class="drill-meta-row"><strong>Type</strong><span>ETF</span></div>
+          <div class="drill-meta-row"><strong>Portfolio weight</strong><span>${w.toFixed(1)}%</span></div>
+          ${topHtml ? `<h3 style="margin:16px 0 8px">Top holdings</h3>${topHtml}` : ''}`;
+      } else {
+        html = `
+          <h2>${escapeHtml(h.ticker)}</h2>
+          ${h.name ? `<p class="drill-subheader">${escapeHtml(h.name)}</p>` : ''}
+          <div class="drill-meta-row"><strong>Type</strong><span>Stock</span></div>
+          <div class="drill-meta-row"><strong>Portfolio weight</strong><span>${w.toFixed(1)}%</span></div>
+          <div class="drill-meta-row"><strong>Sector</strong><span>${escapeHtml(h.sector ?? '—')}</span></div>
+          <div class="drill-meta-row"><strong>Region</strong><span>${escapeHtml(countryToRegion(h.country))}</span></div>`;
+      }
+    }
+  }
+
+  content.innerHTML = html;
+  document.getElementById('drill-panel').classList.add('open');
+  document.getElementById('drill-overlay').classList.add('open');
+}
+
+function closeDrillPanel() {
+  document.getElementById('drill-panel').classList.remove('open');
+  document.getElementById('drill-overlay').classList.remove('open');
+}
+
 // ── Charts ────────────────────────────────────────────────────────────────────
 const chartInstances = {};
 
 function renderCharts(analysis, resolvedHoldings, rawWeights) {
   renderWaterfallChart('chart-holdings', resolvedHoldings, rawWeights, state.thresholds);
-  renderHBar('chart-asset',  analysis.assetClass, 100);
-  renderHBar('chart-sector', analysis.sector,     state.thresholds.sector);
-  renderHBar('chart-region', analysis.region,     state.thresholds.region);
+  renderHBar('chart-asset',  analysis.assetClass, 100,                     null);
+  renderHBar('chart-sector', analysis.sector,     state.thresholds.sector, 'sector');
+  renderHBar('chart-region', analysis.region,     state.thresholds.region, 'region');
 }
 
 function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds) {
@@ -569,6 +712,13 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick(evt, elements) {
+        if (!elements.length) return;
+        openDrillPanel(labels[elements[0].index], 'holdings');
+      },
+      onHover(evt, elements) {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -606,7 +756,7 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
   });
 }
 
-function renderHBar(canvasId, buckets, threshold) {
+function renderHBar(canvasId, buckets, threshold, dimension) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return;
 
@@ -644,6 +794,13 @@ function renderHBar(canvasId, buckets, threshold) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick(evt, elements) {
+        if (!elements.length || !dimension) return;
+        openDrillPanel(labels[elements[0].index], dimension);
+      },
+      onHover(evt, elements) {
+        evt.native.target.style.cursor = (elements.length && dimension) ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -698,6 +855,11 @@ function renderHBar(canvasId, buckets, threshold) {
 document.getElementById('btn-pdf').addEventListener('click', () => {
   window.print();
 });
+
+// ── Drill panel events ────────────────────────────────────────────────────────
+document.getElementById('drill-overlay').addEventListener('click', closeDrillPanel);
+document.getElementById('drill-close').addEventListener('click', closeDrillPanel);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrillPanel(); });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderHoldingsList();
