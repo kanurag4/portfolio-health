@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Portfolio Health is a vanilla-JS portfolio diversification analyser for `kashvector.com/portfolio-health`. Users enter investment holdings (ETFs, stocks); the tool fetches data via Yahoo Finance, looks through ETF top-10 holdings, and visualises sector/region/asset-class exposure with red/amber/green concentration flags.
+Portfolio Health is a vanilla-JS portfolio diversification analyser for `kashvector.com/portfolio-health`. Users enter investment holdings (ETFs, stocks); the tool fetches data via Yahoo Finance, looks through ETF top-10 holdings, and visualises sector/region/asset-class exposure with red/amber/green concentration flags, a 0–100 health score, interactive drill-down panels, and ETF overlap detection.
 
 ## Commands
 
@@ -25,7 +25,7 @@ www/          # Static app — no build, no npm
   config.js   # YAHOO_PROXY_URL export (single constant)
   utils.js    # Pure: parseMoney(), fmt(), formatCurrency(), clampThreshold()
   data.js     # Pure: fetchHolding(), countryToRegion(), regionFromTicker(), SECTOR_LABELS, EQUITY_SECTOR_NORMALIZE, classifyQuoteType()
-  analyse.js  # Pure: normaliseWeights(), analysePortfolio()
+  analyse.js  # Pure: normaliseWeights(), analysePortfolio(), scorePortfolio(), detectOverlap()
   app.js      # ONLY file that touches DOM, window, localStorage
   index.html  # Two-column layout; loads Chart.js + SheetJS via CDN
   style.css   # KashVector dark theme + print CSS
@@ -51,8 +51,8 @@ tests/        # Node built-in test runner (no npm install needed)
    - **ETF / MUTUALFUND**: returns `{ ticker, quoteType: 'ETF', topHoldings[], sectorWeightings[], countryWeightings[], stockPosition, bondPosition, cashPosition }`
    - **Unsupported** (INDEX, CURRENCY, CRYPTOCURRENCY, OPTION, etc.): returns `{ ticker, error: true, message }`
    - **Error**: returns `{ ticker, error: true, message }`
-4. `analysePortfolio()` aggregates all holdings into `assetClass`, `sector`, `region`, `etfConc` buckets and produces `flags[]`
-5. `app.js` renders charts (Chart.js vertical bars), flags, and holdings table
+4. `analysePortfolio()` aggregates all holdings into `assetClass`, `sector`, `region`, `etfConc` buckets and produces `flags[]`, `sectorContributions`, and `regionContributions`
+5. `app.js` renders charts (Chart.js vertical bars), flags, health score card, overlap card, and holdings table. Chart bars are clickable — they open the drill-down panel via `openDrillPanel(label, dimension)`
 
 ### ETF Look-Through
 
@@ -100,6 +100,50 @@ Stock flags include a `via` field (e.g. `"VAS.AX"`) when the concentration comes
 The green stock flag's `count` reflects only real ticker entries — `"${etfTicker} (rest)"` pseudo-entries are excluded from the count.
 
 All four `buildDimFlags` / `buildStockFlags` calls in `analysePortfolio` include `?? default` fallbacks on the threshold so a missing key never silently produces all-green flags.
+
+### Portfolio Health Score
+
+`scorePortfolio(flags)` in `analyse.js` converts flags into a 0–100 score. Four dimensions (stock, sector, region, etf) × 25 pts each:
+- Per dimension: `Math.max(0, 25 − (redCount × 10) − (amberCount × 5))`
+- A dimension with **zero flags** (e.g. no ETFs in portfolio) scores **25 (neutral)** — not penalised
+- Green flags contribute 0 deductions
+
+The score card is hidden when all holdings error out (would otherwise show a misleading 100/100). Rendered by `renderScoreCard(score)` in `app.js` into `#score-card`, placed above `#summary-strip`.
+
+### Sector and Region Contributions
+
+`analysePortfolio()` returns two additional maps alongside the existing buckets:
+
+```js
+sectorContributions: { 'Financials': [{ ticker, contribution, type: 'direct'|'etf' }, …] }
+regionContributions: { 'Australia': [{ ticker, contribution, type: 'direct'|'etf' }, …] }
+```
+
+Each entry records which holding drove how much of a bucket's total, and whether it arrived directly or via ETF look-through. These power the drill-down panel.
+
+### Drill-Down Panel
+
+`openDrillPanel(label, dimension)` / `closeDrillPanel()` in `app.js` control a fixed side panel (`#drill-panel` + `#drill-overlay`) that slides in from the right.
+
+- **Sector/Region bars**: shows `sectorContributions` / `regionContributions` for the clicked bucket, sorted by contribution descending. Each row uses `.drill-contrib-ticker`, `.drill-contrib-type`, `.drill-contrib-pct` CSS classes.
+- **Holdings waterfall bars**: shows ETF top-10 holdings list or stock sector/region metadata.
+- Closes on overlay click, `#drill-close` button, or `Escape` key.
+- Reads from `lastAnalysis` (module-level in `app.js`). All chart `onClick` handlers pass `labels[elements[0].index]` as the label.
+- Asset class chart has `dimension = null` and does not open the panel.
+
+### ETF Overlap Detection
+
+`detectOverlap(resolvedHoldings, normalisedWeights)` in `analyse.js`:
+- Filters to ETFs with non-empty `topHoldings`
+- O(n²) pairwise comparison; finds tickers appearing in both `topHoldings` arrays
+- `weightInA` / `weightInB` are the sub-holding's share **within the ETF** (fraction × 100), not portfolio-level exposure — the UI makes this explicit with a note
+- Returns `[{ etfA, etfB, weightA (portfolio%), weightB (portfolio%), shared: [{ ticker, weightInA, weightInB }] }]`
+
+Rendered by `renderOverlapCard(overlaps, etfCount)` into `#overlap-card`. Hidden when `etfCount < 2`. The "no overlap" message includes a caveat that only ETFs with available top-10 data are compared.
+
+### innerHTML Safety
+
+`buildFlagEl` and all render functions in `app.js` use `escapeHtml()` on every user-controlled string (tickers, names, sector/region labels from Yahoo) before inserting into `innerHTML`. Number literals (`.toFixed()`) and trusted enum strings (`'Direct'`, `'via ETF'`) are safe without escaping. Any new field from a flag object or Yahoo response that reaches `innerHTML` **must** be passed through `escapeHtml()` first.
 
 ### Sector Normalisation
 
@@ -184,6 +228,14 @@ Key: `portfoliohealth_v1`. Persists `holdings[]` and `thresholds`. Forward-compa
 
 ## Implementation Status
 
-All tasks complete and live. Seven concentration-risk fixes deployed (sector bucket split, over-100% normalisation warning, threshold validation, unsupported instrument rejection, phantom ETF green flag, stock count excluding `(rest)` entries, integration tests for threshold clamping). Tests: 74 pass, 0 fail.
+All features complete and live. Tests: 96 pass, 0 fail.
+
+**Shipped:**
+- Concentration flags (red/amber/green) across ETF, sector, region, stock dimensions
+- Seven concentration-risk correctness fixes (sector bucket split, over-100% normalisation warning, threshold validation, unsupported instrument rejection, phantom green flag, stock count fix, threshold clamping)
+- Portfolio Health Score (0–100) with per-dimension breakdown
+- Interactive drill-down side panel (click sector/region/holdings chart bars)
+- ETF Overlap Detection (shared top-10 holdings between ETF pairs)
+- FAQ and About section updated to explain all features
 
 The tool is live at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).
