@@ -76,7 +76,7 @@ export function regionFromTicker(ticker) {
   if (!ticker) return 'Unclassified';
   const dot = ticker.lastIndexOf('.');
   if (dot === -1) return 'United States';
-  const suffix = ticker.slice(dot + 1);
+  const suffix = ticker.slice(dot + 1).toUpperCase();
   return SUFFIX_REGION[suffix] ?? 'Unclassified';
 }
 
@@ -118,15 +118,19 @@ export async function fetchHolding(ticker) {
       const rawSectors  = th.sectorWeightings ?? [];
       const rawCountries = th.countryWeightings ?? [];
       const clamp01 = v => Math.max(0, Math.min(1, v));
+      const safePct = v => {
+        const n = Number(v);
+        return Number.isFinite(n) ? clamp01(n) : 0;
+      };
       return {
         ticker: symbol, name, quoteType: 'ETF', error: false,
-        stockPosition: th.stockPosition?.raw != null ? clamp01(th.stockPosition.raw) : null,
-        bondPosition:  th.bondPosition?.raw  != null ? clamp01(th.bondPosition.raw)  : 0,
-        cashPosition:  th.cashPosition?.raw  != null ? clamp01(th.cashPosition.raw)  : 0,
+        stockPosition: th.stockPosition?.raw != null ? safePct(th.stockPosition.raw) : null,
+        bondPosition:  th.bondPosition?.raw  != null ? safePct(th.bondPosition.raw)  : 0,
+        cashPosition:  th.cashPosition?.raw  != null ? safePct(th.cashPosition.raw)  : 0,
         topHoldings: rawHoldings.map(h => ({
           ticker: h.symbol,
           name:   h.holdingName ?? h.symbol,
-          weight: h.holdingPercent?.raw ?? h.holdingPercent ?? 0,
+          weight: safePct(h.holdingPercent?.raw ?? h.holdingPercent ?? 0),
         })),
         sectorWeightings: rawSectors,
         countryWeightings: rawCountries,

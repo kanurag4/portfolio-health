@@ -175,6 +175,8 @@ Thresholds are constrained to 1–100 in two places:
 
 Template columns: `Ticker`, `Name (optional)`, `Amount_AUD`, `Percentage`, `IsASX`, `Notes`.
 
+Export columns: `Ticker`, `Amount_AUD`, `Percentage`, `IsASX`. `Name` and `Notes` are not stored in state and are not exported.
+
 Import logic for the `IsASX` column:
 - Ticker already ends with `.AX` → `isAsx = true`, no suffix added
 - Ticker has any other suffix (`.L`, `.NS`, etc.) → `isAsx = false`
@@ -228,7 +230,7 @@ Key: `portfoliohealth_v1`. Persists `holdings[]` and `thresholds`. Forward-compa
 
 ## Implementation Status
 
-All features complete and live. Tests: 96 pass, 0 fail.
+All features complete and live. Tests: 101 pass, 0 fail.
 
 **Shipped:**
 - Concentration flags (red/amber/green) across ETF, sector, region, stock dimensions
@@ -237,5 +239,7 @@ All features complete and live. Tests: 96 pass, 0 fail.
 - Interactive drill-down side panel (click sector/region/holdings chart bars)
 - ETF Overlap Detection (shared top-10 holdings between ETF pairs)
 - FAQ and About section updated to explain all features
+- Four peer-review defect fixes: unresolved holdings now flow into explicit Unresolved buckets (sector/region/assetClass) and trigger concentration flags; ETF holdingPercent values sanitised via `safePct()` before aggregation; `sectorWeightings ?? []` guard prevents crash on missing ETF sector data; lowercase ticker suffixes (e.g. `.ax`) now matched case-insensitively in `regionFromTicker()`
+- Export now includes `IsASX` column for round-trip fidelity on no-suffix tickers
 
 The tool is live at `kashvector.com/portfolio-health` and linked from the KashVector landing page with its own icon (`portfolio-health-icon.svg`). The source `www/index.html` is in full parity with the deployed file (SEO meta, canonical, JSON-LD, FAQ section, footer link all present).

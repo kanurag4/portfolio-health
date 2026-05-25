@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'node:test';
-import { countryToRegion, regionFromTicker, SECTOR_LABELS, classifyQuoteType } from '../www/data.js';
+import { afterEach, describe, it } from 'node:test';
+import { countryToRegion, regionFromTicker, SECTOR_LABELS, classifyQuoteType, fetchHolding } from '../www/data.js';
 
 describe('countryToRegion', () => {
   it('maps Australia', () => assert.equal(countryToRegion('Australia'), 'Australia'));
@@ -15,6 +15,7 @@ describe('countryToRegion', () => {
 });
 
 describe('regionFromTicker', () => {
+  it('handles lowercase suffixes',      () => assert.equal(regionFromTicker('cba.ax'),      'Australia'));
   it('.AX → Australia',                () => assert.equal(regionFromTicker('CBA.AX'),      'Australia'));
   it('no suffix → United States',      () => assert.equal(regionFromTicker('AAPL'),         'United States'));
   it('.NS → Emerging Markets (India)', () => assert.equal(regionFromTicker('RELIANCE.NS'),  'Emerging Markets'));
@@ -42,4 +43,41 @@ describe('classifyQuoteType', () => {
   it('returns null for CRYPTOCURRENCY', () => assert.equal(classifyQuoteType('CRYPTOCURRENCY'), null));
   it('returns null for OPTION',    () => assert.equal(classifyQuoteType('OPTION'),     null));
   it('returns null for unknown type', () => assert.equal(classifyQuoteType('FUTURE'),  null));
+});
+
+describe('fetchHolding — defensive ETF weights', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('normalises malformed ETF top holding weights to safe fractions', async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        quoteSummary: {
+          result: [{
+            quoteType: { quoteType: 'ETF', longName: 'Test ETF' },
+            topHoldings: {
+              stockPosition: { raw: 1 },
+              bondPosition: { raw: 0 },
+              cashPosition: { raw: 0 },
+              holdings: [
+                { symbol: 'AAPL', holdingName: 'Apple', holdingPercent: { raw: 4 } },
+                { symbol: 'MSFT', holdingName: 'Microsoft', holdingPercent: { fmt: 'bad' } },
+                { symbol: 'CBA.AX', holdingName: 'CBA', holdingPercent: { raw: -0.2 } },
+              ],
+            },
+          }],
+        },
+      }),
+    });
+
+    const result = await fetchHolding('TEST');
+
+    assert.equal(result.topHoldings[0].weight, 1);
+    assert.equal(result.topHoldings[1].weight, 0);
+    assert.equal(result.topHoldings[2].weight, 0);
+  });
 });

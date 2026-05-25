@@ -336,11 +336,12 @@ function exportExcel() {
       Ticker: h.ticker,
       Amount_AUD: h.inputMode === '$' ? h.value : '',
       Percentage: h.inputMode === '%' ? h.value : '',
+      IsASX: h.isAsx ? 'Yes' : 'No',
     }));
   if (rows.length === 0) { alert('No holdings to export.'); return; }
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Holdings');
   XLSX.writeFile(wb, 'my-portfolio.xlsx');
 }
@@ -385,7 +386,7 @@ async function renderResults(resolvedHoldings, analysis, rawWeights) {
   const unresolvedEl = document.getElementById('unresolved-warning');
   if (analysis.unresolved.length > 0) {
     unresolvedEl.hidden = false;
-    unresolvedEl.textContent = `⚠ Could not fetch data for: ${analysis.unresolved.join(', ')}. These are excluded from the analysis.`;
+    unresolvedEl.textContent = `⚠ Could not fetch data for: ${analysis.unresolved.join(', ')}. Their weight is shown as Unresolved in the charts and may trigger concentration flags.`;
   } else {
     unresolvedEl.hidden = true;
   }

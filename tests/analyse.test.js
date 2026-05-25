@@ -245,6 +245,53 @@ describe('analysePortfolio — unresolved tickers', () => {
     );
     assert.deepEqual(unresolved, ['XYZ']);
   });
+
+  it('keeps unresolved holding weight visible in analysis buckets', () => {
+    const holdings = [
+      { ticker: 'CBA.AX', quoteType: 'EQUITY', sector: 'Financials', country: 'Australia', error: false },
+      { ticker: 'BAD', error: true },
+    ];
+    const rawWeights = [
+      { ticker: 'CBA.AX', inputMode: '%', value: 20 },
+      { ticker: 'BAD', inputMode: '%', value: 80 },
+    ];
+    const result = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+
+    assert.equal(result.assetClass['Unresolved'], 80);
+    assert.equal(result.sector['Unresolved'], 80);
+    assert.equal(result.region['Unresolved'], 80);
+  });
+});
+
+describe('analysePortfolio — defensive ETF data handling', () => {
+  it('treats missing sectorWeightings as diversified ETF exposure', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [], countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const result = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+
+    assert.equal(result.sector['Diversified (ETF)'], 100);
+  });
+
+  it('ignores malformed ETF top holding weights rather than producing NaN buckets', () => {
+    const holdings = [{
+      ticker: 'VAS.AX', quoteType: 'ETF', error: false,
+      stockPosition: 1, bondPosition: 0, cashPosition: 0,
+      topHoldings: [
+        { ticker: 'CBA.AX', name: 'CBA', weight: NaN },
+        { ticker: 'BHP.AX', name: 'BHP', weight: -0.2 },
+      ],
+      sectorWeightings: [], countryWeightings: [],
+    }];
+    const rawWeights = [{ ticker: 'VAS.AX', inputMode: '%', value: 100 }];
+    const result = analysePortfolio(holdings, rawWeights, { etf: 30, stock: 10, sector: 30, region: 50 });
+
+    assert.equal(result.region['Unclassified'], 100);
+    assert.ok(!result.flags.some(f => Number.isNaN(f.value)));
+  });
 });
 
 describe('analysePortfolio — region fallback from top holdings tickers', () => {

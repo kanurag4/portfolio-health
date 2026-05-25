@@ -90,8 +90,14 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
   const regionContributions = {};
 
   for (const h of resolvedHoldings) {
-    if (h.error) { unresolved.push(h.ticker); continue; }
     const w = weights[h.ticker] ?? 0;
+    if (h.error) {
+      unresolved.push(h.ticker);
+      add(assetClass, 'Unresolved', w);
+      add(sector, 'Unresolved', w);
+      add(region, 'Unresolved', w);
+      continue;
+    }
 
     if (h.quoteType === 'ETF') {
       add(etfConc, h.ticker, w);
@@ -103,8 +109,9 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       const unclasAmt = w * Math.max(0, 1 - ((h.stockPosition ?? 0) + bondPct + cashPct));
       if (unclasAmt > 0.01) add(assetClass, 'Unclassified', unclasAmt);
 
-      if (h.sectorWeightings.length > 0) {
-        for (const sw of h.sectorWeightings) {
+      const sectorWeightings = h.sectorWeightings ?? [];
+      if (sectorWeightings.length > 0) {
+        for (const sw of sectorWeightings) {
           const [key, val] = Object.entries(sw)[0];
           const pct = typeof val === 'object' ? (val.raw ?? 0) : val;
           const sectorName = SECTOR_LABELS[key] ?? key;
@@ -127,10 +134,12 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
       } else if (h.topHoldings && h.topHoldings.length > 0) {
         let covered = 0;
         for (const top of h.topHoldings) {
+          const topWeight = safePct(top.weight);
+          if (topWeight <= 0) continue;
           const regionName = regionFromTicker(top.ticker);
-          add(region, regionName, w * top.weight);
-          addContrib(regionContributions, regionName, h.ticker, w * top.weight, 'etf');
-          covered += top.weight;
+          add(region, regionName, w * topWeight);
+          addContrib(regionContributions, regionName, h.ticker, w * topWeight, 'etf');
+          covered += topWeight;
         }
         if (covered < 1) {
           add(region, 'Unclassified', w * (1 - covered));
@@ -143,10 +152,12 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
 
       let covered = 0;
       for (const top of (h.topHoldings ?? [])) {
-        add(stockConc, top.ticker, w * top.weight);
+        const topWeight = safePct(top.weight);
+        if (topWeight <= 0) continue;
+        add(stockConc, top.ticker, w * topWeight);
         if (!stockConcVia[top.ticker]) stockConcVia[top.ticker] = new Set();
         stockConcVia[top.ticker].add(h.ticker);
-        covered += top.weight;
+        covered += topWeight;
       }
       if (covered < 1) add(stockConc, `${h.ticker} (rest)`, w * (1 - covered));
     } else {
@@ -174,6 +185,11 @@ export function analysePortfolio(resolvedHoldings, rawWeights, thresholds) {
 function add(obj, key, value) {
   if (!key || value <= 0) return;
   obj[key] = (obj[key] ?? 0) + value;
+}
+
+function safePct(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0;
 }
 
 function addContrib(obj, bucketName, ticker, contribution, type) {
