@@ -1,6 +1,7 @@
 import { parseMoney, clampThreshold } from './utils.js';
 import { fetchHolding, countryToRegion } from './data.js';
 import { analysePortfolio, normaliseWeights, scorePortfolio, detectOverlap } from './analyse.js';
+import { YAHOO_PROXY_URL } from './config.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -62,6 +63,56 @@ function saveState() {
   }));
 }
 
+// Caches the last successfully fetched analysis so a reload (with unchanged holdings)
+// can restore results instantly instead of re-fetching every ticker and burning the
+// Worker's per-IP rate limit.
+function loadCachedResult() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw).lastResult ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastResult() {
+  if (!lastAnalysis) return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.holdings = state.holdings;
+    payload.thresholds = state.thresholds;
+    payload.lastResult = { rawWeights: lastAnalysis.rawWeights, resolvedHoldings: lastAnalysis.resolvedHoldings };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+// True when two merged-holdings snapshots describe the same tickers/mode/value,
+// regardless of order — used to decide whether a cached result is still valid.
+function weightsMatch(a, b) {
+  if (!Array.isArray(b) || a.length !== b.length) return false;
+  const norm = arr => [...arr]
+    .map(h => `${h.ticker}|${h.inputMode}|${h.value}`)
+    .sort();
+  const na = norm(a), nb = norm(b);
+  return na.every((v, i) => v === nb[i]);
+}
+
+// ── Inline messages (replaces window.alert) ──────────────────────────────────
+let inputMessageTimer = null;
+function showInputMessage(text, type = 'error') {
+  const el = document.getElementById('input-message');
+  clearTimeout(inputMessageTimer);
+  el.textContent = text;
+  el.className = `kv-inline-msg kv-inline-msg-${type}`;
+  el.hidden = false;
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (type === 'success') {
+    inputMessageTimer = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const holdingsList   = document.getElementById('holdings-list');
 const btnAddRow      = document.getElementById('btn-add-row');
@@ -101,18 +152,33 @@ function buildRow(holding, index) {
   const row = document.createElement('div');
   row.className = 'kv-holding-row';
 
+  const tickerWrap = document.createElement('div');
+  tickerWrap.className = 'kv-ac-wrapper';
+
   const ticker = document.createElement('input');
   ticker.className = 'kv-input';
   ticker.type = 'text';
   ticker.placeholder = 'e.g. VAS, CBA';
   ticker.value = holding.ticker;
+  ticker.autocomplete = 'off';
   ticker.addEventListener('blur', () => {
-    let t = ticker.value.trim().toUpperCase();
-    if (t && state.holdings[index].isAsx && !t.includes('.')) t += '.AX';
-    state.holdings[index].ticker = t;
-    ticker.value = t;
-    saveState();
+    // Delay so a click on an autocomplete item registers before we normalise/hide.
+    setTimeout(() => {
+      let t = ticker.value.trim().toUpperCase();
+      if (t && state.holdings[index].isAsx && !t.includes('.')) t += '.AX';
+      state.holdings[index].ticker = t;
+      ticker.value = t;
+      saveState();
+      hideAutocomplete(acList);
+    }, 150);
   });
+
+  const acList = document.createElement('div');
+  acList.className = 'kv-ac-list';
+  acList.hidden = true;
+
+  attachAutocomplete(ticker, acList, index);
+  tickerWrap.append(ticker, acList);
 
   const asxLabel = document.createElement('label');
   asxLabel.className = 'kv-asx-toggle';
@@ -177,8 +243,64 @@ function buildRow(holding, index) {
     renderHoldingsList();
   });
 
-  row.append(ticker, asxLabel, modeBtn, amount, removeBtn);
+  row.append(tickerWrap, asxLabel, modeBtn, amount, removeBtn);
   return row;
+}
+
+// ── Ticker autocomplete ───────────────────────────────────────────────────────
+let acTimer = null;
+let acAbort = null;
+
+function attachAutocomplete(tickerInput, acList, index) {
+  tickerInput.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    const q = tickerInput.value.trim();
+    if (q.length < 2) { hideAutocomplete(acList); return; }
+    acTimer = setTimeout(() => fetchAutocomplete(q, acList, tickerInput, index), 300);
+  });
+  tickerInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') hideAutocomplete(acList);
+  });
+}
+
+async function fetchAutocomplete(q, acList, tickerInput, index) {
+  acAbort?.abort();
+  acAbort = new AbortController();
+  try {
+    const url = `${YAHOO_PROXY_URL.replace(/\/$/, '')}/search?q=${encodeURIComponent(q)}`;
+    const resp = await fetch(url, { signal: acAbort.signal });
+    if (!resp.ok) { hideAutocomplete(acList); return; }
+    const results = await resp.json();
+    if (!Array.isArray(results) || results.length === 0) { hideAutocomplete(acList); return; }
+    renderAutocomplete(results, acList, tickerInput, index);
+  } catch {
+    hideAutocomplete(acList);
+  }
+}
+
+function renderAutocomplete(results, acList, tickerInput, index) {
+  acList.innerHTML = results.map(r => `
+    <div class="kv-ac-item" data-symbol="${escapeHtml(r.symbol)}" role="option" tabindex="-1">
+      <span class="kv-ac-name">${escapeHtml(r.name)}</span>
+      <span class="kv-ac-meta">${escapeHtml(r.symbol)}${r.exchange ? ' · ' + escapeHtml(r.exchange) : ''}</span>
+    </div>`).join('');
+  acList.hidden = false;
+  acList.querySelectorAll('.kv-ac-item').forEach(item => {
+    item.addEventListener('mousedown', e => e.preventDefault()); // survive the input's blur handler
+    item.addEventListener('click', () => {
+      const symbol = item.dataset.symbol.toUpperCase();
+      tickerInput.value = symbol;
+      state.holdings[index].ticker = symbol;
+      state.holdings[index].isAsx = symbol.endsWith('.AX');
+      saveState();
+      hideAutocomplete(acList);
+    });
+  });
+}
+
+function hideAutocomplete(acList) {
+  acList.hidden = true;
+  acList.innerHTML = '';
 }
 
 function formatInputVal(v) {
@@ -210,8 +332,20 @@ function renderThresholds() {
     state.thresholds.region = parse(threshRegion.value) ?? state.thresholds.region;
     renderThresholds(); // snap any invalid inputs back to the current valid value
     saveState();
+    recomputeFromCache(); // re-flag/re-score/re-chart against already-fetched data — no refetch
   });
 });
+
+// Recomputes flags, score, and charts from the last fetched holdings when thresholds
+// change, so tweaking a threshold doesn't re-spend the Worker's per-IP rate limit.
+function recomputeFromCache() {
+  if (!lastAnalysis) return;
+  const { resolvedHoldings, rawWeights } = lastAnalysis;
+  const analysis = analysePortfolio(resolvedHoldings, rawWeights, state.thresholds);
+  lastAnalysis = { resolvedHoldings, analysis, rawWeights };
+  saveLastResult();
+  renderResults(resolvedHoldings, analysis, rawWeights);
+}
 
 // ── Reset ────────────────────────────────────────────────────────────────────
 let resetPending = false;
@@ -229,6 +363,7 @@ btnReset.addEventListener('click', () => {
   }
   resetPending = false;
   state = defaultState();
+  lastAnalysis = null;
   localStorage.removeItem(STORAGE_KEY);
   renderHoldingsList();
   renderThresholds();
@@ -313,7 +448,7 @@ document.getElementById('file-import').addEventListener('change', async e => {
   }
 
   if (imported.length === 0) {
-    alert('No valid holdings found in the Excel file. Check the Ticker and Amount/Percentage columns.');
+    showInputMessage('No valid holdings found in the Excel file. Check the Ticker and Amount/Percentage columns.', 'error');
     e.target.value = '';
     return;
   }
@@ -322,7 +457,9 @@ document.getElementById('file-import').addEventListener('change', async e => {
   saveState();
   renderHoldingsList();
   if (skipped.length > 0) {
-    alert(`Imported ${imported.length} holding(s). Skipped ${skipped.length} row(s) with no valid amount: ${skipped.join(', ')}`);
+    showInputMessage(`Imported ${imported.length} holding(s). Skipped ${skipped.length} row(s) with no valid amount: ${skipped.join(', ')}`, 'warning');
+  } else {
+    showInputMessage(`Imported ${imported.length} holding(s).`, 'success');
   }
   e.target.value = '';
 });
@@ -338,7 +475,7 @@ function exportExcel() {
       Percentage: h.inputMode === '%' ? h.value : '',
       IsASX: h.isAsx ? 'Yes' : 'No',
     }));
-  if (rows.length === 0) { alert('No holdings to export.'); return; }
+  if (rows.length === 0) { showInputMessage('No holdings to export.', 'error'); return; }
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }];
@@ -346,13 +483,38 @@ function exportExcel() {
   XLSX.writeFile(wb, 'my-portfolio.xlsx');
 }
 
+// ── Example portfolio ────────────────────────────────────────────────────────
+document.getElementById('btn-example').addEventListener('click', () => {
+  state.holdings = [
+    { ticker: 'VAS.AX',  inputMode: '%', value: 40, isAsx: true },
+    { ticker: 'VGS.AX',  inputMode: '%', value: 25, isAsx: true },
+    { ticker: 'CBA.AX',  inputMode: '%', value: 15, isAsx: true },
+    { ticker: 'AAPL',    inputMode: '%', value: 10, isAsx: false },
+    { ticker: 'BTC-USD', inputMode: '%', value: 10, isAsx: false },
+  ];
+  saveState();
+  renderHoldingsList();
+  btnAnalyse.click();
+});
+
 // ── Analyse ──────────────────────────────────────────────────────────────────
 let lastAnalysis = null;
+
+// Fetches all tickers in parallel but updates the button label as each one settles,
+// so a large portfolio doesn't look frozen while the slowest ticker is still loading.
+async function fetchHoldingsWithProgress(tickers) {
+  let done = 0;
+  const setLabel = () => { btnAnalyse.textContent = `Analysing… (${done}/${tickers.length})`; };
+  setLabel();
+  return Promise.all(tickers.map(t =>
+    fetchHolding(t).finally(() => { done++; setLabel(); })
+  ));
+}
 
 btnAnalyse.addEventListener('click', async () => {
   const validHoldings = state.holdings.filter(h => h.ticker && h.value != null && Number(h.value) > 0);
   if (validHoldings.length === 0) {
-    alert('Please add at least one holding with a ticker and amount.');
+    showInputMessage('Please add at least one holding with a ticker and amount.', 'error');
     return;
   }
 
@@ -360,19 +522,20 @@ btnAnalyse.addEventListener('click', async () => {
   // and normaliseWeights receives mergedHoldings so weights accumulate correctly per ticker.
   const mergedHoldings = mergeHoldings(validHoldings);
 
-  btnAnalyse.textContent = 'Analysing…';
+  document.getElementById('input-message').hidden = true;
   btnAnalyse.disabled = true;
 
   try {
     const uniqueTickers = [...new Set(mergedHoldings.map(h => h.ticker))];
-    const resolvedHoldings = await Promise.all(uniqueTickers.map(t => fetchHolding(t)));
+    const resolvedHoldings = await fetchHoldingsWithProgress(uniqueTickers);
 
     const analysis = analysePortfolio(resolvedHoldings, mergedHoldings, state.thresholds);
     lastAnalysis = { resolvedHoldings, analysis, rawWeights: mergedHoldings };
+    saveLastResult();
 
     await renderResults(resolvedHoldings, analysis, mergedHoldings);
   } catch (err) {
-    alert('Analysis failed: ' + err.message);
+    showInputMessage('Analysis failed: ' + err.message, 'error');
   } finally {
     btnAnalyse.textContent = 'Analyse Portfolio';
     btnAnalyse.disabled = false;
@@ -677,6 +840,20 @@ function closeDrillPanel() {
 // ── Charts ────────────────────────────────────────────────────────────────────
 const chartInstances = {};
 
+function chartColors() {
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    text:   cs.getPropertyValue('--kv-text').trim()   || '#f1f5f9',
+    muted:  cs.getPropertyValue('--kv-muted').trim()  || '#94a3b8',
+    border: cs.getPropertyValue('--kv-border').trim() || '#334155',
+  };
+}
+
+// Re-render charts on theme toggle so axis/grid colors track the active theme.
+new MutationObserver(() => {
+  if (lastAnalysis) renderCharts(lastAnalysis.analysis, lastAnalysis.resolvedHoldings, lastAnalysis.rawWeights);
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
 function renderCharts(analysis, resolvedHoldings, rawWeights) {
   renderWaterfallChart('chart-holdings', resolvedHoldings, rawWeights, state.thresholds);
   renderHBar('chart-asset',  analysis.assetClass, 100,                     null);
@@ -693,6 +870,7 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
   }
 
   const { weights } = normaliseWeights(rawWeights);
+  const theme = chartColors();
 
   const items = resolvedHoldings
     .filter(h => !h.error)
@@ -754,7 +932,7 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
         x: {
           grid: { display: false },
           ticks: {
-            color: '#f1f5f9',
+            color: theme.text,
             font: { size: 11 },
             maxRotation: 35,
             minRotation: 0,
@@ -767,8 +945,8 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
         y: {
           min: 0,
           max: 100,
-          grid: { color: '#334155' },
-          ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
+          grid: { color: theme.border },
+          ticks: { color: theme.muted, callback: v => v + '%', maxTicksLimit: 6 },
           afterFit: scale => { scale.width = 88; },
         },
       },
@@ -784,6 +962,7 @@ function renderHBar(canvasId, buckets, threshold, dimension) {
     chartInstances[canvasId].destroy();
   }
 
+  const theme = chartColors();
   const sorted = Object.entries(buckets)
     .sort(([, a], [, b]) => b - a)
     .filter(([, v]) => v > 0.1);
@@ -833,7 +1012,7 @@ function renderHBar(canvasId, buckets, threshold, dimension) {
         x: {
           grid: { display: false },
           ticks: {
-            color: '#f1f5f9',
+            color: theme.text,
             font: { size: 11 },
             maxRotation: 35,
             minRotation: 0,
@@ -846,8 +1025,8 @@ function renderHBar(canvasId, buckets, threshold, dimension) {
         y: {
           min: 0,
           max: yMax,
-          grid: { color: '#334155' },
-          ticks: { color: '#94a3b8', callback: v => v + '%', maxTicksLimit: 6 },
+          grid: { color: theme.border },
+          ticks: { color: theme.muted, callback: v => v + '%', maxTicksLimit: 6 },
         },
       },
     },
@@ -881,7 +1060,23 @@ document.getElementById('drill-overlay').addEventListener('click', closeDrillPan
 document.getElementById('drill-close').addEventListener('click', closeDrillPanel);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrillPanel(); });
 
+// Restores the last analysis on load if the current holdings are byte-identical
+// to what produced it — skips the placeholder screen and avoids a needless refetch.
+function tryRestoreLastResult() {
+  const cached = loadCachedResult();
+  if (!cached) return;
+  const validHoldings = state.holdings.filter(h => h.ticker && h.value != null && Number(h.value) > 0);
+  if (validHoldings.length === 0) return;
+  const mergedHoldings = mergeHoldings(validHoldings);
+  if (!weightsMatch(mergedHoldings, cached.rawWeights)) return;
+
+  const analysis = analysePortfolio(cached.resolvedHoldings, mergedHoldings, state.thresholds);
+  lastAnalysis = { resolvedHoldings: cached.resolvedHoldings, analysis, rawWeights: mergedHoldings };
+  renderResults(cached.resolvedHoldings, analysis, mergedHoldings);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderHoldingsList();
 renderThresholds();
+tryRestoreLastResult();
 

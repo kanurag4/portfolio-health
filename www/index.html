@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a">
-  <title>Portfolio Health Check — KashVector</title>
-  <meta name="description" content="Analyse your investment portfolio for sector, region, and stock concentration risk. Import from Excel or enter manually. Free portfolio health check — no sign-up, no data leaves your browser.">
+  <title>Portfolio Diversification &amp; Concentration Risk Analyser | KashVector</title>
+  <meta name="description" content="Is your portfolio too concentrated in one sector or stock? Upload from Excel or enter holdings manually — get instant diversification analysis. Free, no sign-up, all calculations stay in your browser.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -46,6 +46,8 @@
 
   <nav class="kv-tool-nav" aria-label="KashVector tools">
     <a href="/stock/">Stock Evaluator</a>
+    <a href="/dcf/">DCF Valuation</a>
+    <a href="/gordon-growth/">Gordon Growth</a>
     <a href="/budget/">Budget</a>
     <a href="/debt-recycling/">Debt Recycling</a>
     <a href="/portfolio-health/" class="kv-nav-active" aria-current="page">Portfolio</a>
@@ -56,11 +58,13 @@
     <a href="/life-buyback/">Life Buyback</a>
     <a href="/budget-impact/">Budget Impact</a>
     <a href="/articles/">Articles</a>
+    <a href="/contact/">Contact</a>
   </nav>
 
   <main class="kv-main">
     <!-- INPUT PANEL -->
     <section class="kv-panel kv-input-panel" id="input-panel">
+      <button class="kv-btn kv-btn-ghost kv-btn-example" id="btn-example">✨ Try an example portfolio</button>
       <div class="kv-excel-row">
         <button class="kv-btn kv-btn-secondary" id="btn-download-template">↓ Download Template</button>
         <label class="kv-btn kv-btn-secondary kv-file-label" for="file-import">↑ Import Excel
@@ -70,6 +74,7 @@
       <p class="kv-divider-label">— or enter manually —</p>
       <p class="kv-ticker-hint">Ticker formats: ASX <code>CBA.AX</code> · US <code>AAPL</code> · Crypto <code>BTC-USD</code> · London <code>SHEL.L</code></p>
 
+      <div id="input-message" class="kv-inline-msg" hidden></div>
       <div id="holdings-list"></div>
       <div id="pct-remaining" class="kv-pct-remaining"></div>
       <button class="kv-btn kv-btn-ghost" id="btn-add-row">+ Add another holding</button>
@@ -120,21 +125,22 @@
         </details>
 
         <div class="kv-chart-section">
-          <h3>Holdings Allocation</h3>
+          <h3>Holdings Allocation <span class="kv-clickable-hint">🔍 click a bar for details</span></h3>
           <div class="kv-chart-wrapper"><canvas id="chart-holdings"></canvas></div>
           <p class="kv-chart-note">Each bar shows one holding's portfolio weight, stacked cumulatively. Colours use the same concentration thresholds as the flags above.</p>
         </div>
         <div class="kv-chart-section">
           <h3>Asset Class</h3>
           <div class="kv-chart-wrapper"><canvas id="chart-asset"></canvas></div>
+          <p class="kv-chart-note">Summary view only — see the Holdings, Sector, and Region charts below to drill into individual positions.</p>
         </div>
         <div class="kv-chart-section">
-          <h3>Sector</h3>
+          <h3>Sector <span class="kv-clickable-hint">🔍 click a bar for details</span></h3>
           <div class="kv-chart-wrapper kv-chart-wrapper--tall"><canvas id="chart-sector"></canvas></div>
           <p class="kv-chart-note">ETF sectors from Yahoo Finance sectorWeightings (full fund). Equities use their reported sector.</p>
         </div>
         <div class="kv-chart-section">
-          <h3>Region</h3>
+          <h3>Region <span class="kv-clickable-hint">🔍 click a bar for details</span></h3>
           <div class="kv-chart-wrapper"><canvas id="chart-region"></canvas></div>
           <p class="kv-chart-note">ETF regions from Yahoo country data where available, otherwise estimated from top-10 ticker suffixes. Unclassified = weight outside top 10.</p>
         </div>
@@ -208,8 +214,24 @@
     </div>
   </section>
 
+  <section class="sharesight-promo" aria-label="Affiliate promotion">
+    <div class="sharesight-promo-inner">
+      <div class="sharesight-logo-wrap">
+        <img src="/sharesight-logo.jpg" alt="Sharesight" width="120" height="28">
+      </div>
+      <div class="sharesight-copy">
+        <p class="sharesight-offer">⭐ <strong>Special offer for KashVector users</strong> — save 4 months on an annual plan.</p>
+        <p>Your broker doesn't show the full picture. Sharesight tracks true portfolio performance — dividends, currency gains, and capital gains reports at tax time. Trusted by 500,000+ investors worldwide.</p>
+      </div>
+      <div class="sharesight-cta">
+        <a href="https://www.sharesight.com/au/kashvector/" target="_blank" rel="noopener sponsored">Try free</a>
+        <span class="sharesight-affiliate-note">Affiliate link</span>
+      </div>
+    </div>
+  </section>
+
   <footer class="kv-footer">
-    This tool is for educational purposes only and does not constitute financial advice. &nbsp;·&nbsp; <a href="/">← All KashVector tools</a>
+    This tool is for educational purposes only and does not constitute financial advice. &nbsp;·&nbsp; <a href="/">← All KashVector tools</a> &nbsp;·&nbsp; © 2026 KashVector. All rights reserved.
   </footer>
 
   <!-- Drill-down side panel (outside layout grid) -->
