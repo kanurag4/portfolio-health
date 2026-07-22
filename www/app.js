@@ -844,8 +844,8 @@ function chartColors() {
   const cs = getComputedStyle(document.documentElement);
   return {
     text:   cs.getPropertyValue('--kv-text').trim()   || '#f1f5f9',
-    muted:  cs.getPropertyValue('--kv-muted').trim()  || '#94a3b8',
-    border: cs.getPropertyValue('--kv-border').trim() || '#334155',
+    muted:  cs.getPropertyValue('--kv-muted').trim()  || '#93a0bd',
+    border: cs.getPropertyValue('--kv-border').trim() || '#223052',
   };
 }
 
@@ -891,7 +891,7 @@ function renderWaterfallChart(canvasId, resolvedHoldings, rawWeights, thresholds
 
     const thr = item.quoteType === 'ETF' ? (thresholds.etf ?? 30) : (thresholds.stock ?? 10);
     if (item.weight >= thr)       colors.push('rgba(239,68,68,0.75)');
-    else if (item.weight >= thr - 2) colors.push('rgba(245,158,11,0.75)');
+    else if (item.weight >= thr - 2) colors.push('rgba(249,115,22,0.75)');
     else                           colors.push('rgba(34,197,94,0.75)');
   }
 
@@ -974,7 +974,7 @@ function renderHBar(canvasId, buckets, threshold, dimension) {
 
   const colors = values.map(v => {
     if (v >= threshold)       return 'rgba(239,68,68,0.75)';
-    if (v >= threshold - 2)   return 'rgba(245,158,11,0.75)';
+    if (v >= threshold - 2)   return 'rgba(249,115,22,0.75)';
     return 'rgba(34,197,94,0.75)';
   });
 
@@ -1037,7 +1037,7 @@ function renderHBar(canvasId, buckets, threshold, dimension) {
         const y = scales.y.getPixelForValue(threshold);
         if (y < chartArea.top || y > chartArea.bottom) return;
         c.save();
-        c.strokeStyle = 'rgba(148,163,184,0.5)';
+        c.strokeStyle = 'rgba(147,160,189,0.5)';
         c.setLineDash([4, 4]);
         c.lineWidth = 1;
         c.beginPath();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0b1120">
   <title>Portfolio Diversification &amp; Concentration Risk Analyser | KashVector</title>
   <meta name="description" content="Is your portfolio too concentrated in one sector or stock? Upload from Excel or enter holdings manually — get instant diversification analysis. Free, no sign-up, all calculations stay in your browser.">
   <script type="application/ld+json">
@@ -20,6 +20,9 @@
   </script>
   <link rel="icon" type="image/svg+xml" href="../portfolio-health-icon.svg">
   <link rel="canonical" href="https://kashvector.com/portfolio-health/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="/kv-theme.js"></script>
   <script src="/kv-banner.js"></script>
@@ -44,22 +47,8 @@
     <button class="theme-toggle kv-theme-toggle" onclick="window.kvTheme.toggle()" aria-label="Toggle theme"></button>
   </header>
 
-  <nav class="kv-tool-nav" aria-label="KashVector tools">
-    <a href="/stock/">Stock Evaluator</a>
-    <a href="/dcf/">DCF Valuation</a>
-    <a href="/gordon-growth/">Gordon Growth</a>
-    <a href="/budget/">Budget</a>
-    <a href="/debt-recycling/">Debt Recycling</a>
-    <a href="/portfolio-health/" class="kv-nav-active" aria-current="page">Portfolio</a>
-    <a href="/fire/">FIRE</a>
-    <a href="/mortgage/">Mortgage Calculator</a>
-    <a href="/super-compare/">Salary Sacrifice</a>
-    <a href="/rent-vs-buy/">Rent vs Buy</a>
-    <a href="/life-buyback/">Life Buyback</a>
-    <a href="/budget-impact/">Budget Impact</a>
-    <a href="/articles/">Articles</a>
-    <a href="/contact/">Contact</a>
-  </nav>
+  <div id="kv-nav-placeholder" style="height:41px"></div>
+  <script src="/kv-nav.js"></script>
 
   <main class="kv-main">
     <!-- INPUT PANEL -->
@@ -162,21 +151,35 @@
     </section>
   </main>
 
-  <section class="sharesight-promo" aria-label="Affiliate promotion">
-    <div class="sharesight-promo-inner">
-      <div class="sharesight-logo-wrap">
-        <img src="/sharesight-logo.jpg" alt="Sharesight" width="120" height="28">
+  <div class="affiliate-promo-grid">
+    <section class="sharesight-promo" aria-label="Affiliate promotion">
+      <div class="sharesight-promo-inner">
+        <div class="sharesight-logo-wrap">
+          <img src="/sharesight-logo.jpg" alt="Sharesight" width="100" height="22">
+        </div>
+        <div class="sharesight-copy">
+          <p class="sharesight-offer">⭐ <strong>Save 4 months</strong> on an annual Sharesight plan — true portfolio performance tracking, trusted by 500,000+ investors.</p>
+        </div>
+        <div class="sharesight-cta">
+          <a href="https://www.sharesight.com/au/kashvector/" target="_blank" rel="noopener sponsored">Try free</a>
+        </div>
       </div>
-      <div class="sharesight-copy">
-        <p class="sharesight-offer">⭐ <strong>Special offer for KashVector users</strong> — save 4 months on an annual plan.</p>
-        <p>Your broker doesn't show the full picture. Sharesight tracks true portfolio performance — dividends, currency gains, and capital gains reports at tax time. Trusted by 500,000+ investors worldwide.</p>
+    </section>
+    <section class="simplywallst-promo" aria-label="Affiliate promotion">
+      <div class="simplywallst-promo-inner">
+        <div class="simplywallst-logo-wrap">
+          <img src="/simplywallst-logo.svg" alt="Simply Wall St" width="100" height="22">
+        </div>
+        <div class="simplywallst-copy">
+          <p class="simplywallst-offer">📊 <strong>See any stock's story in one snapshot</strong> — Simply Wall St's visual reports cover valuation, growth, health and dividends.</p>
+        </div>
+        <div class="simplywallst-cta">
+          <a href="https://goto.simplywall.st/xJXVm3" target="_blank" rel="noopener sponsored">Explore</a>
+        </div>
       </div>
-      <div class="sharesight-cta">
-        <a href="https://www.sharesight.com/au/kashvector/" target="_blank" rel="noopener sponsored">Try free</a>
-        <span class="sharesight-affiliate-note">Affiliate link</span>
-      </div>
-    </div>
-  </section>
+    </section>
+  </div>
+  <p class="affiliate-promo-note">Affiliate links</p>
 
   <section class="tool-info">
     <div class="tool-about">
