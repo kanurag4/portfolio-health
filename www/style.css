@@ -1,17 +1,3 @@
-/* KashVector design tokens */
-:root {
-  --kv-bg:      #0b1120;
-  --kv-card:    #111a30;
-  --kv-card-2:  #182342;
-  --kv-text:    #f5f7fc;
-  --kv-muted:   #93a0bd;
-  --kv-accent:  #f5a623;
-  --kv-border:  #223052;
-  --kv-pass:    #22c55e;
-  --kv-fail:    #ef4444;
-  --kv-warn:    #f97316;
-}
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -312,18 +298,6 @@ body {
   .kv-header-title-group { flex: 1; min-width: 0; order: 2; justify-content: center; }
   .kv-theme-toggle { position: static; flex: 0 0 auto; order: 3; width: 44px; height: 44px; }
   .kv-header-text h1 { font-size: 1.1rem; }
-}
-
-/* ── Light mode overrides ── */
-html:not(.dark) {
-  --kv-bg:     #faf8f4;
-  --kv-card:   #ffffff;
-  --kv-card-2: #f1ede4;
-  --kv-text:   #16202b;
-  --kv-muted:  #4d5c6b;
-  --kv-border: #e7e2d8;
-  --kv-accent: #1a3a5f;
-  --kv-warn:   #b45309;
 }
 
 /* ── Tool info & FAQ section ── */
